@@ -1,0 +1,38 @@
+[project]
+name = "blender-model-optimizer"
+version = "1.1.0"
+description = "Blender add-on to optimize AI-generated 3D models"
+requires-python = ">=3.10"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming (relaxed — Blender uses PascalCase class names with prefixes)
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific rules
+]
+ignore = [
+    "E402",   # module-level imports not at top — required for Blender bl_info dict
+    "N801",   # class name should use CapWords — Blender enforces ADDON_OT_/PT_ prefixes
+    "N802",   # function name should be lowercase — Blender API callbacks (draw, execute, etc.)
+    "N806",   # variable in function should be lowercase — Blender constants
+    "RUF012", # mutable class attrs — Blender requires set literals for bl_options on classes
+    "SIM105", # contextlib.suppress — try/except/pass is clearer for Blender property loading
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Blender add-on files need bl_info before imports
+"src/*.py" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
