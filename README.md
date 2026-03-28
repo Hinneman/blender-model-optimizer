@@ -11,6 +11,8 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 - **Resize Textures** — Downsize or resize all textures to a maximum resolution
 - **Export GLB** — Export with Draco mesh compression and configurable image format (WebP/JPEG/PNG)
 - **Full Pipeline** — Run all steps in one click with toggleable stages
+- **Pipeline Progress** — Live progress panel showing per-step status, sub-step progress, timing, and overall completion
+- **Cancellable Pipeline** — Cancel mid-pipeline with ESC or a Cancel button; all changes are automatically undone
 - **Presets** — Save, load, and reset default settings across sessions
 
 ## Requirements
@@ -33,6 +35,9 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 2. Click the **AI Optimizer** tab
 3. Adjust settings in the sub-panels (Geometry Fix, Decimate, Textures, Export)
 4. Click **Run Full Pipeline** to run all enabled steps, or use individual step buttons
+5. While the pipeline runs, a **Pipeline Progress** panel shows each step's status and timing
+6. Press **ESC** or click **Cancel Pipeline** to abort — all changes will be rolled back
+7. After completion, click **Dismiss** to close the results panel
 
 ## Settings
 
