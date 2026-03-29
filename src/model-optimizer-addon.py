@@ -1124,6 +1124,13 @@ class AIOPT_PT_main_panel(Panel):
 
     def draw(self, context):
         layout = self.layout
+        state = context.window_manager.ai_optimizer_pipeline
+
+        # While the pipeline is running or showing results, hide everything
+        # — the progress sub-panel handles all UI during that time.
+        if state.is_running or state.step_results != "[]":
+            return
+
         props = context.scene.ai_optimizer
 
         # --- Stats ---
