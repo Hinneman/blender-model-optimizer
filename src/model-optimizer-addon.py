@@ -19,8 +19,8 @@
 
 bl_info = {
     "name": "AI 3D Model Optimizer",
-    "author": "Claude",
-    "version": (1, 3, 0),
+    "author": "René Voigt, Claude",
+    "version": (1, 3, 1),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > AI Optimizer",
     "description": "Optimize AI-generated 3D models: fix geometry, decimate, clean textures, export compressed GLB",
@@ -296,13 +296,15 @@ def clean_images_all(context):
                         f"  [AI Optimizer] Identical: '{duplicate.name}' == '{keeper.name}'"
                         f" → removing '{duplicate.name}'"
                     )
+                    is_a = duplicate == img_a
                     duplicate.user_remap(keeper)
+                    dup_name = duplicate.name
                     bpy.data.images.remove(duplicate)
                     removed += 1
-                    merged.add(duplicate.name)
+                    merged.add(dup_name)
 
                     # If img_a was the duplicate, stop comparing it
-                    if duplicate == img_a:
+                    if is_a:
                         break
 
     return (removed, f"Removed {removed} truly identical image(s)")
@@ -594,6 +596,7 @@ class AIOPT_OT_run_all(Operator):
     _timer = None
     _steps: list  # list of (name, setup_fn, tick_fn, teardown_fn)
     _sub_items: list  # items for current step
+    _redraw_pending: bool  # burn one extra tick so the UI can actually repaint
     _start_time: float
     _step_start_time: float
     _faces_before: int  # for decimate summary
@@ -668,6 +671,7 @@ class AIOPT_OT_run_all(Operator):
         # First modal tick will run setup — don't do it here so the UI
         # has a chance to redraw and show the progress panel first.
         self._needs_setup = True
+        self._redraw_pending = False
 
         # Start timer & modal handler
         self._timer = context.window_manager.event_timer_add(0.01, window=context.window)
@@ -701,6 +705,17 @@ class AIOPT_OT_run_all(Operator):
             state.current_sub_step = 0
             self._step_start_time = time.monotonic()
             self._needs_setup = False
+            self._redraw_pending = True
+            for area in context.screen.areas:
+                if area.type == "VIEW_3D":
+                    area.tag_redraw()
+            return {"RUNNING_MODAL"}
+
+        # Burn one extra tick after setup so Blender's draw cycle
+        # actually paints the updated progress panel before we block
+        # the main thread with heavy per-object work.
+        if self._redraw_pending:
+            self._redraw_pending = False
             for area in context.screen.areas:
                 if area.type == "VIEW_3D":
                     area.tag_redraw()
@@ -761,6 +776,9 @@ class AIOPT_OT_run_all(Operator):
         state.current_step_name = ""
         context.window_manager.event_timer_remove(self._timer)
         self._timer = None
+        for area in context.screen.areas:
+            if area.type == "VIEW_3D":
+                area.tag_redraw()
         self.report({"INFO"}, f"Pipeline complete in {state.total_elapsed:.1f}s")
 
     def _cancel_pipeline(self, context):
@@ -1304,7 +1322,8 @@ class AIOPT_PT_geometry_panel(Panel):
 
     @classmethod
     def poll(cls, context):
-        return not context.window_manager.ai_optimizer_pipeline.is_running
+        state = context.window_manager.ai_optimizer_pipeline
+        return not state.is_running and state.step_results == "[]"
 
     def draw(self, context):
         layout = self.layout
@@ -1346,7 +1365,8 @@ class AIOPT_PT_decimate_panel(Panel):
 
     @classmethod
     def poll(cls, context):
-        return not context.window_manager.ai_optimizer_pipeline.is_running
+        state = context.window_manager.ai_optimizer_pipeline
+        return not state.is_running and state.step_results == "[]"
 
     def draw(self, context):
         layout = self.layout
@@ -1378,7 +1398,8 @@ class AIOPT_PT_textures_panel(Panel):
 
     @classmethod
     def poll(cls, context):
-        return not context.window_manager.ai_optimizer_pipeline.is_running
+        state = context.window_manager.ai_optimizer_pipeline
+        return not state.is_running and state.step_results == "[]"
 
     def draw(self, context):
         layout = self.layout
@@ -1418,7 +1439,8 @@ class AIOPT_PT_export_panel(Panel):
 
     @classmethod
     def poll(cls, context):
-        return not context.window_manager.ai_optimizer_pipeline.is_running
+        state = context.window_manager.ai_optimizer_pipeline
+        return not state.is_running and state.step_results == "[]"
 
     def draw(self, context):
         layout = self.layout
@@ -1460,7 +1482,8 @@ class AIOPT_PT_presets_panel(Panel):
 
     @classmethod
     def poll(cls, context):
-        return not context.window_manager.ai_optimizer_pipeline.is_running
+        state = context.window_manager.ai_optimizer_pipeline
+        return not state.is_running and state.step_results == "[]"
 
     def draw(self, context):
         layout = self.layout
