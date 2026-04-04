@@ -22,7 +22,7 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 
 ## Installation
 
-1. Download `src/model-optimizer-addon.py`
+1. Download `model-optimizer-addon.py` from the [latest release](../../releases/latest)
 2. Open Blender
 3. Go to **Edit → Preferences → Add-ons**
 4. Click **Install from Disk** (Blender 4.2+) or **Install...** (older versions)

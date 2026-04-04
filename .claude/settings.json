@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(ruff check *)",
-      "Bash(ruff format:*)"
+      "Bash(ruff format:*)",
+      "Bash(git rm:*)",
+      "Bash(py -3 build.py)",
+      "Bash(py -3 -m ruff check build/model-optimizer-addon.py)",
+      "Bash(py -3 -m ruff check build.py)",
+      "Bash(py build.py)"
     ]
   }
 }

@@ -29,14 +29,24 @@ ruff format src/         # format
 
 ## Project Architecture
 
-- **Single-file add-on**: Keep everything in `src/model-optimizer-addon.py` unless the file grows beyond ~1500 lines. At that point, consider converting to a multi-file add-on package.
+- **Multi-file package**: Source is split into domain modules under `src/`. A build step (`python build.py`) concatenates them into a single installable `.py` in `build/`.
+- **Module layout**:
+  - `utils.py` — shared helpers, config, export
+  - `textures.py` — image cleanup, resizing, vertex color baking
+  - `materials.py` — material merging, mesh joining
+  - `geometry.py` — geometry fixing, decimation, interior removal, symmetry
+  - `properties.py` — property groups
+  - `operators.py` — all operator classes
+  - `panels.py` — all panel classes
+  - `__init__.py` — bl_info, registration
+- **Version management**: Single source of truth is `pyproject.toml`. The build script injects the version into `bl_info`. Tag with `v*` to trigger a GitHub release.
 - **Adding a pipeline step** requires:
-  1. New `AIOPT_OT_<name>` operator class
-  2. `BoolProperty` toggle in `AIOPT_Properties` (e.g., `run_<name>`)
-  3. Add property name to `SAVEABLE_PROPS` list
-  4. UI panel entry (new sub-panel or entry in existing panel)
-  5. Step call in `AIOPT_OT_run_all.execute()`
-  6. Register the class in the `classes` tuple
+  1. New `AIOPT_OT_<name>` operator class in `operators.py`
+  2. `BoolProperty` toggle in `AIOPT_Properties` in `properties.py` (e.g., `run_<name>`)
+  3. Add property name to `SAVEABLE_PROPS` list in `utils.py`
+  4. UI panel entry in `panels.py` (new sub-panel or entry in existing panel)
+  5. Step entry in `AIOPT_OT_run_all` (setup/tick/teardown methods in `operators.py`)
+  6. Register the class in the `classes` tuple in `__init__.py`
 
 ## Things to Avoid
 
