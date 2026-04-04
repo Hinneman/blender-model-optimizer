@@ -122,11 +122,6 @@ def estimate_glb_size(meshes, props):
         # Normal maps compress well (~4:1 from raw RGB)
         tex_bytes += nmap_res * nmap_res * 3 / 4.0
 
-    # Vertex color baking replaces all textures with per-vertex data
-    if props.bake_vertex_colors:
-        verts_total = sum(len(obj.data.vertices) for obj in meshes)
-        tex_bytes = verts_total * 4  # RGBA byte per vertex replaces image textures
-
     # -- Overhead (GLB container, materials, scene graph) --
     overhead = 10 * 1024
 
@@ -171,7 +166,7 @@ SAVEABLE_PROPS = [
     "lod_levels",
     "lod_suffix_pattern",
     "lod_ratios",
-    "bake_vertex_colors",
+
     "run_symmetry",
     "symmetry_axis",
     "symmetry_threshold",

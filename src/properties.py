@@ -1,3 +1,5 @@
+import os
+
 from bpy.props import (
     BoolProperty,
     EnumProperty,
@@ -85,7 +87,7 @@ class AIOPT_Properties(PropertyGroup):
                 " Slower but catches interior faces within connected geometry",
             ),
         ],
-        default="LOOSE_PARTS",
+        default="RAY_CAST",
         description="Method used to detect interior faces",
     )
 
@@ -127,7 +129,7 @@ class AIOPT_Properties(PropertyGroup):
     # -- Decimate settings --
     dissolve_angle: FloatProperty(
         name="Dissolve Angle",
-        default=0.0872665,
+        default=0.2618,
         min=0.0,
         max=0.785398,
         step=1,
@@ -142,13 +144,13 @@ class AIOPT_Properties(PropertyGroup):
         max=1.0,
         step=1,
         precision=3,
-        description="Decimation ratio. 0.1 = keep 10% of faces",
+        description="Decimation ratio. 0.5 = keep 50% of faces after dissolve",
         subtype="FACTOR",
         update=_tag_3d_redraw,
     )
     bake_normal_map: BoolProperty(
         name="Bake Normal Map",
-        default=False,
+        default=True,
         description="Bake high-poly detail into a normal map before decimating. Requires Cycles",
     )
     normal_map_resolution: EnumProperty(
@@ -193,9 +195,12 @@ class AIOPT_Properties(PropertyGroup):
     # -- Export settings --
     output_filename: StringProperty(name="Filename", default="optimized_model.glb", description="Output filename")
     output_folder: StringProperty(
-        name="Folder", default="", subtype="DIR_PATH", description="Output folder (blank = same as .blend file)"
+        name="Folder",
+        default=os.path.join(os.path.expanduser("~"), "Downloads"),
+        subtype="DIR_PATH",
+        description="Output folder",
     )
-    export_selected_only: BoolProperty(name="Selected Only", default=False, description="Export only selected objects")
+    export_selected_only: BoolProperty(name="Selected Only", default=True, description="Export only selected objects")
     use_draco: BoolProperty(
         name="Draco Compression",
         default=True,
@@ -276,13 +281,6 @@ class AIOPT_Properties(PropertyGroup):
         name="LOD Ratios",
         default="1.0, 0.5, 0.25",
         description="Comma-separated decimate ratios per LOD level (LOD0 should be 1.0)",
-    )
-
-    # -- Vertex color baking --
-    bake_vertex_colors: BoolProperty(
-        name="Bake Vertex Colors (Experimental)",
-        default=False,
-        description="Bake textures into vertex colors and remove images. Low fidelity, eliminates texture payload",
     )
 
 

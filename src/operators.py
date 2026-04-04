@@ -14,7 +14,6 @@ from .geometry import (
 )
 from .materials import join_meshes_by_material, merge_duplicate_materials
 from .textures import (
-    bake_vertex_colors_single,
     clean_images_all,
     clean_unused_all,
     resize_texture_single,
@@ -243,11 +242,6 @@ class AIOPT_OT_export_glb(Operator):
     def execute(self, context):
         props = context.scene.ai_optimizer
 
-        if props.bake_vertex_colors:
-            meshes = get_selected_meshes()
-            for obj in meshes:
-                bake_vertex_colors_single(context, obj)
-
         # LOD generation (before main export)
         if props.run_lod:
             lod_detail = generate_lods(context, props)
@@ -426,7 +420,13 @@ class AIOPT_OT_run_all(Operator):
 
         if sub < total:
             # Process one sub-item
-            tick(context, sub)
+            try:
+                tick(context, sub)
+            except Exception as e:
+                print(f"  [AI Optimizer] Error in step '{_name}': {e}")
+                self._cancel_pipeline(context)
+                self.report({"ERROR"}, f"Pipeline failed at '{_name}': {e}")
+                return {"CANCELLED"}
             state.current_sub_step = sub + 1
         else:
             # Teardown current step
@@ -718,11 +718,6 @@ class AIOPT_OT_run_all(Operator):
 
     def _tick_export(self, context, index):
         props = context.scene.ai_optimizer
-
-        if props.bake_vertex_colors:
-            meshes = get_selected_meshes()
-            for obj in meshes:
-                bake_vertex_colors_single(context, obj)
 
         detail = export_glb_all(context, props)
         return detail

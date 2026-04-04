@@ -393,7 +393,7 @@ def decimate_single(context, obj, props):
     context.view_layer.objects.active = obj
     obj.select_set(True)
 
-    # Pre-pass: dissolve nearly-coplanar faces (cleans flat surfaces)
+    # Pre-pass: dissolve nearly-coplanar faces (cleans flat surfaces, preserves UVs)
     if props.dissolve_angle > 0:
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_all(action="SELECT")

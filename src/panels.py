@@ -474,18 +474,6 @@ class AIOPT_PT_export_panel(Panel):
             col.prop(props, "lod_ratios")
 
         layout.separator()
-        col = layout.column(align=True)
-        col.label(text="Vertex Colors (Experimental):", icon="VPAINT_HLT")
-        col.prop(props, "bake_vertex_colors")
-        if props.bake_vertex_colors:
-            box = layout.box()
-            warn_col = box.column(align=True)
-            warn_col.scale_y = 0.8
-            warn_col.label(text="Bakes textures to vertex colors.", icon="ERROR")
-            warn_col.label(text="Low fidelity — one color per vertex.")
-            warn_col.label(text="Only for stylized or dense meshes.")
-
-        layout.separator()
         layout.operator("ai_optimizer.export_glb", icon="EXPORT")
 
 
