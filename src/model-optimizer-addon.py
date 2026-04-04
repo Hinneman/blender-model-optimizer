@@ -96,6 +96,75 @@ def is_print3d_available():
     return hasattr(bpy.ops.mesh, "print3d_clean_non_manifold")
 
 
+def _tag_3d_redraw(self, context):
+    """Force 3D viewport sidebar to redraw (used by properties that affect the size estimate)."""
+    for area in context.screen.areas:
+        if area.type == "VIEW_3D":
+            area.tag_redraw()
+
+
+def estimate_glb_size(meshes, props):
+    """Estimate GLB export file size in bytes based on scene data and settings."""
+    # -- Geometry --
+    geo_bytes = 0
+    for obj in meshes:
+        mesh = obj.data
+        verts = len(mesh.vertices)
+        faces = len(mesh.polygons)
+        # position (12B) + normal (12B) + UV (8B) per vertex + index (12B per tri)
+        geo_bytes += verts * 32 + faces * 3 * 4
+
+    # Apply decimate ratio if the decimate step is enabled
+    if props.run_decimate:
+        geo_bytes *= props.decimate_ratio
+
+    if props.use_draco:
+        # Draco compression factor: ~2x at level 0, ~6x at level 10
+        draco_factor = 2.0 + (props.draco_level / 10.0) * 4.0
+        geo_bytes /= draco_factor
+
+    # -- Textures --
+    tex_bytes = 0
+    images = [
+        i
+        for i in bpy.data.images
+        if i.type == "IMAGE" and i.name not in ("Render Result", "Viewer Node") and get_image_users(i) > 0
+    ]
+    for img in images:
+        w, h = img.size[0], img.size[1]
+        if w == 0 or h == 0:
+            continue
+
+        # Cap to max_texture_size if resize step is enabled
+        if props.run_resize_textures:
+            max_s = props.max_texture_size
+            if props.resize_mode == "ALL":
+                w, h = max_s, max_s
+            else:  # DOWNSIZE
+                if w > max_s or h > max_s:
+                    scale = max_s / max(w, h)
+                    w = max(1, 2 ** round(math.log2(max(1, int(w * scale)))))
+                    h = max(1, 2 ** round(math.log2(max(1, int(h * scale)))))
+
+        raw = w * h * 4  # RGBA
+        fmt = props.image_format
+        if fmt == "WEBP":
+            # quality=100 → ratio ~8 (light compression), quality=1 → ratio ~40 (heavy)
+            ratio = 8.0 + (1.0 - props.image_quality / 100.0) * 32.0
+            tex_bytes += raw / ratio
+        elif fmt == "JPEG":
+            # quality=100 → ratio ~5 (light compression), quality=1 → ratio ~30 (heavy)
+            ratio = 5.0 + (1.0 - props.image_quality / 100.0) * 25.0
+            tex_bytes += raw / ratio
+        else:  # NONE (PNG)
+            tex_bytes += raw / 5.0
+
+    # -- Overhead (GLB container, materials, scene graph) --
+    overhead = 10 * 1024
+
+    return geo_bytes + tex_bytes + overhead
+
+
 # -------------------------------------------------------------
 #  Extracted helper functions (called by operators & modal pipeline)
 # -------------------------------------------------------------
@@ -1271,10 +1340,12 @@ class AIOPT_Properties(PropertyGroup):
     run_fix_geometry: BoolProperty(
         name="Fix Geometry", default=True, description="Fix non-manifold geometry, merge vertices, recalculate normals"
     )
-    run_decimate: BoolProperty(name="Decimate", default=True, description="Reduce polygon count")
+    run_decimate: BoolProperty(name="Decimate", default=True, description="Reduce polygon count", update=_tag_3d_redraw)
     run_clean_images: BoolProperty(name="Clean Images", default=True, description="Remove duplicate images")
     run_clean_unused: BoolProperty(name="Clean Unused", default=True, description="Remove unused data blocks")
-    run_resize_textures: BoolProperty(name="Resize Textures", default=True, description="Resize textures to max size")
+    run_resize_textures: BoolProperty(
+        name="Resize Textures", default=True, description="Resize textures to max size", update=_tag_3d_redraw
+    )
     run_export: BoolProperty(name="Export GLB", default=True, description="Export optimized GLB")
 
     # -- Geometry settings --
@@ -1334,11 +1405,17 @@ class AIOPT_Properties(PropertyGroup):
         precision=3,
         description="Decimation ratio. 0.1 = keep 10% of faces",
         subtype="FACTOR",
+        update=_tag_3d_redraw,
     )
 
     # -- Texture settings --
     max_texture_size: IntProperty(
-        name="Max Size (px)", default=1024, min=64, max=8192, description="Maximum texture dimension in pixels"
+        name="Max Size (px)",
+        default=1024,
+        min=64,
+        max=8192,
+        description="Maximum texture dimension in pixels",
+        update=_tag_3d_redraw,
     )
     resize_mode: EnumProperty(
         name="Resize Mode",
@@ -1348,6 +1425,7 @@ class AIOPT_Properties(PropertyGroup):
         ],
         default="DOWNSIZE",
         description="How to handle texture resizing",
+        update=_tag_3d_redraw,
     )
 
     # -- Export settings --
@@ -1357,7 +1435,10 @@ class AIOPT_Properties(PropertyGroup):
     )
     export_selected_only: BoolProperty(name="Selected Only", default=False, description="Export only selected objects")
     use_draco: BoolProperty(
-        name="Draco Compression", default=True, description="Use Draco mesh compression (recommended for web)"
+        name="Draco Compression",
+        default=True,
+        description="Use Draco mesh compression (recommended for web)",
+        update=_tag_3d_redraw,
     )
     draco_level: IntProperty(
         name="Draco Level",
@@ -1365,6 +1446,7 @@ class AIOPT_Properties(PropertyGroup):
         min=0,
         max=10,
         description="Draco compression level (higher = smaller file, slower decode)",
+        update=_tag_3d_redraw,
     )
     image_format: EnumProperty(
         name="Image Format",
@@ -1375,9 +1457,15 @@ class AIOPT_Properties(PropertyGroup):
         ],
         default="WEBP",
         description="Image format for textures in the GLB",
+        update=_tag_3d_redraw,
     )
     image_quality: IntProperty(
-        name="Quality", default=85, min=1, max=100, description="Image quality for JPEG/WebP (80-90 recommended)"
+        name="Quality",
+        default=85,
+        min=1,
+        max=100,
+        description="Image quality for JPEG/WebP (80-90 recommended)",
+        update=_tag_3d_redraw,
     )
 
 
@@ -1410,6 +1498,7 @@ class AIOPT_PT_main_panel(Panel):
 
     def draw(self, context):
         layout = self.layout
+        props = context.scene.ai_optimizer
         state = context.window_manager.ai_optimizer_pipeline
 
         # While the pipeline is running or showing results, hide everything
@@ -1436,6 +1525,13 @@ class AIOPT_PT_main_panel(Panel):
             col.label(text=f"Vertices: {total_verts:,}")
             col.label(text=f"Images: {total_images}")
             col.label(text=f"Materials: {total_materials}")
+
+            est_bytes = estimate_glb_size(meshes, props)
+            if est_bytes >= 1024 * 1024:
+                est_label = f"~{est_bytes / (1024 * 1024):.1f} MB"
+            else:
+                est_label = f"~{est_bytes / 1024:.0f} KB"
+            col.label(text=f"Est. Export Size: {est_label}")
 
             if is_print3d_available():
                 col.label(text="3D Print Toolbox: installed", icon="CHECKMARK")
