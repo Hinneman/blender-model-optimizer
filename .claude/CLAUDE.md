@@ -2,11 +2,19 @@
 
 ## Project Overview
 
-Blender add-on ("AI 3D Model Optimizer") that optimizes AI-generated 3D models for web/real-time use. Single-file Python add-on targeting Blender 4.0+.
+Blender add-on ("AI 3D Model Optimizer") that optimizes AI-generated 3D models for web/real-time use. Multi-file Python package targeting Blender 4.0+, with a build step that produces a single installable `.py`.
 
 ## Structure
 
-- `src/model-optimizer-addon.py` — The entire add-on (operators, UI panels, properties, registration)
+- `src/__init__.py` — bl_info, register/unregister
+- `src/operators.py` — All AIOPT_OT_* operator classes
+- `src/panels.py` — All AIOPT_PT_* panel classes
+- `src/properties.py` — Property groups (AIOPT_Properties, AIOPT_PipelineState)
+- `src/geometry.py` — Geometry fixing, decimation, interior removal, symmetry
+- `src/textures.py` — Image cleanup, resizing, fingerprinting, vertex color baking
+- `src/materials.py` — Material merging, mesh joining
+- `src/utils.py` — Shared helpers (logging, config, mesh selection, size estimation, export)
+- `build.py` — Build script to produce single-file addon
 
 ## Key Concepts
 
@@ -17,11 +25,21 @@ Blender add-on ("AI 3D Model Optimizer") that optimizes AI-generated 3D models f
 - Settings are persisted as JSON via `bpy.utils.user_resource('CONFIG')`
 - Blender naming conventions: classes prefixed with `AIOPT_`, operators use `OT_`, panels use `PT_`
 
+## Build
+
+- Run `python build.py` to produce `build/model-optimizer-addon.py`
+- The build reads version from `pyproject.toml` and injects it into `bl_info`
+- Install the built file in Blender: Edit → Preferences → Add-ons → Install from Disk
+
+## Releasing
+
+- Update version in `pyproject.toml`
+- Commit and tag: `git tag v1.5.0 && git push --tags`
+- GitHub Action builds and creates a release with the addon `.py` attached
+
 ## Development
 
-- No build step — the `.py` file is installed directly into Blender
 - No external dependencies beyond Blender's bundled Python
-- Test by installing in Blender: Edit → Preferences → Add-ons → Install from Disk
 - **Linting**: `ruff check src/` — config in `pyproject.toml`
 - **Formatting**: `ruff format src/`
 - See [BEST_PRACTICES.md](BEST_PRACTICES.md) for coding conventions and guidelines

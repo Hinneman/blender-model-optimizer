@@ -2,41 +2,52 @@ name: Release
 
 on:
   push:
-    branches: [main]
-    paths:
-      - pyproject.toml
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          fetch-depth: 0
+          python-version: '3.11'
 
-      - name: Get version from pyproject.toml
-        id: version
+      - name: Validate tag matches version
         run: |
-          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Check if tag already exists
-        id: check
-        run: |
-          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          TOML_VERSION=$(python -c "
+          import re
+          with open('pyproject.toml') as f:
+              for line in f:
+                  m = re.match(r'^version\s*=\s*\"([^\"]+)\"', line)
+                  if m:
+                      print(m.group(1))
+                      break
+          ")
+          if [ "$TAG_VERSION" != "$TOML_VERSION" ]; then
+            echo "ERROR: Tag version ($TAG_VERSION) does not match pyproject.toml ($TOML_VERSION)"
+            exit 1
           fi
+          echo "Version: $TAG_VERSION"
 
-      - name: Create tag and release
-        if: steps.check.outputs.exists == 'false'
+      - name: Lint
         run: |
-          git tag "${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
-          gh release create "${{ steps.version.outputs.tag }}" --generate-notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          pip install ruff
+          ruff check src/
+
+      - name: Build
+        run: python build.py
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: build/model-optimizer-addon.py
