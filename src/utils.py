@@ -216,6 +216,11 @@ def export_glb_all(context, props):
 
     output_path = os.path.join(output_dir, props.output_filename)
 
+    # Blender's exporter uses "AUTO" to keep original formats (PNG→PNG, JPEG→JPEG).
+    # Our "NONE" enum value means "keep as PNG / no conversion", so we map it to "AUTO".
+    # Blender's own "NONE" means "export no images at all", which is the bug we're fixing.
+    blender_image_format = "AUTO" if props.image_format == "NONE" else props.image_format
+
     export_settings = {
         "filepath": output_path,
         "export_format": "GLB",
@@ -228,7 +233,7 @@ def export_glb_all(context, props):
         "export_draco_normal_quantization": props.draco_normal_quantization,
         "export_draco_texcoord_quantization": props.draco_texcoord_quantization,
         "export_draco_color_quantization": 10,
-        "export_image_format": props.image_format,
+        "export_image_format": blender_image_format,
     }
 
     if props.image_format in ("JPEG", "WEBP"):
@@ -317,6 +322,8 @@ def generate_lods(context, props):
             context.view_layer.objects.active = meshes[0]
 
         # Export — export_apply=True applies modifiers non-destructively during export
+        blender_image_format = "AUTO" if props.image_format == "NONE" else props.image_format
+
         export_settings = {
             "filepath": output_path,
             "export_format": "GLB",
@@ -329,7 +336,7 @@ def generate_lods(context, props):
             "export_draco_normal_quantization": props.draco_normal_quantization,
             "export_draco_texcoord_quantization": props.draco_texcoord_quantization,
             "export_draco_color_quantization": 10,
-            "export_image_format": props.image_format,
+            "export_image_format": blender_image_format,
         }
 
         if props.image_format in ("JPEG", "WEBP"):
