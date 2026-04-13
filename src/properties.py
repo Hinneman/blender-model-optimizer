@@ -283,6 +283,48 @@ class AIOPT_Properties(PropertyGroup):
         description="Comma-separated decimate ratios per LOD level (LOD0 should be 1.0)",
     )
 
+    # -- Analysis settings --
+    analysis_target_preset: EnumProperty(
+        name="Target",
+        items=[
+            ("MOBILE", "Mobile", "Target ~5,000 faces for mobile"),
+            ("WEB", "Web", "Target ~25,000 faces for web/desktop"),
+            ("DESKTOP", "Desktop", "Target ~75,000 faces for high-end"),
+            ("CUSTOM", "Custom", "Enter a specific face count"),
+        ],
+        default="WEB",
+        description="Target face count for decimate ratio recommendation",
+    )
+    analysis_target_faces: IntProperty(
+        name="Target Faces",
+        default=25000,
+        min=100,
+        max=10000000,
+        description="Custom target face count for decimate recommendation",
+    )
+
+    # -- Small Pieces settings --
+    run_remove_small_pieces: BoolProperty(
+        name="Remove Small Pieces",
+        default=True,
+        description="Delete disconnected mesh islands below size threshold",
+    )
+    small_pieces_face_threshold: IntProperty(
+        name="Min Faces",
+        default=50,
+        min=1,
+        max=10000,
+        description="Delete loose parts with fewer than this many faces",
+    )
+    small_pieces_volume_threshold: FloatProperty(
+        name="Min Volume",
+        default=0.0001,
+        min=0.0,
+        max=100.0,
+        precision=6,
+        description="Delete loose parts with volume smaller than this (m³)",
+    )
+
 
 class AIOPT_PipelineState(PropertyGroup):
     """Runtime state for pipeline progress tracking. Stored on WindowManager."""
@@ -297,3 +339,19 @@ class AIOPT_PipelineState(PropertyGroup):
     total_elapsed: FloatProperty(default=0.0)
     total_steps: IntProperty(default=0)
     step_names: StringProperty(default="[]")  # JSON array of step names
+
+
+class AIOPT_AnalysisState(PropertyGroup):
+    """Analysis results from the last Run Analysis call. Stored on WindowManager."""
+
+    has_results: BoolProperty(default=False)
+    total_faces: IntProperty(default=0)
+    non_manifold_edges: IntProperty(default=0)
+    zero_edges: IntProperty(default=0)
+    zero_faces: IntProperty(default=0)
+    thin_faces: IntProperty(default=0)
+    thin_face_pct: FloatProperty(default=0.0)
+    intersecting_faces: IntProperty(default=0)
+    intersecting_faces_available: BoolProperty(default=False)
+    recommended_ratio: FloatProperty(default=0.5)
+    recommended_merge_distance: FloatProperty(default=0.0001)
