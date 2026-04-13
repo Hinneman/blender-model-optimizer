@@ -26,7 +26,6 @@ from .utils import (
     generate_lods,
     get_config_path,
     get_selected_meshes,
-    is_print3d_available,  # noqa: F401
     load_defaults,
     save_defaults,
 )
@@ -883,7 +882,7 @@ class AIOPT_OT_analyze_mesh(Operator):
             target = self._PRESET_TARGETS.get(props.analysis_target_preset, 25000)
 
         ratio = round(min(max(target / max(total_faces, 1), 0.01), 1.0), 3)
-        thin_pct = thin_faces / max(total_faces, 1) * 100
+        thin_pct = (thin_faces + zero_faces) / max(total_faces, 1) * 100
 
         # Write results
         state.has_results = True
