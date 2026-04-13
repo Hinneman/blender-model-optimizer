@@ -784,6 +784,7 @@ class AIOPT_OT_analyze_mesh(Operator):
     _PRESET_TARGETS = {"MOBILE": 5000, "WEB": 25000, "DESKTOP": 75000}
 
     def execute(self, context):
+        import random
         import statistics
 
         import bmesh
@@ -809,37 +810,34 @@ class AIOPT_OT_analyze_mesh(Operator):
 
         for obj in meshes:
             bm = bmesh.new()
-            bm.from_mesh(obj.data)
-            bm.edges.ensure_lookup_table()
-            bm.faces.ensure_lookup_table()
+            try:
+                bm.from_mesh(obj.data)
+                bm.edges.ensure_lookup_table()
+                bm.faces.ensure_lookup_table()
 
-            total_faces += len(bm.faces)
+                total_faces += len(bm.faces)
 
-            for edge in bm.edges:
-                length = edge.calc_length()
-                all_edge_lengths.append(length)
-                if not edge.is_manifold:
-                    non_manifold_edges += 1
-                if length == 0.0:
-                    zero_edges += 1
+                for edge in bm.edges:
+                    length = edge.calc_length()
+                    all_edge_lengths.append(length)
+                    if not edge.is_manifold:
+                        non_manifold_edges += 1
+                    if length == 0.0:
+                        zero_edges += 1
 
-            for face in bm.faces:
-                area = face.calc_area()
-                if area == 0.0:
-                    zero_faces += 1
-                elif area < THIN_THRESHOLD:
-                    thin_faces += 1
-
-            bm.free()
+                for face in bm.faces:
+                    area = face.calc_area()
+                    if area == 0.0:
+                        zero_faces += 1
+                    elif area < THIN_THRESHOLD:
+                        thin_faces += 1
+            finally:
+                bm.free()
 
         # Merge distance: median edge length x 0.1%
         # Sample up to 10,000 edges to stay fast on large meshes
         if all_edge_lengths:
-            sample = (
-                all_edge_lengths
-                if len(all_edge_lengths) <= 10000
-                else [all_edge_lengths[i] for i in range(0, len(all_edge_lengths), len(all_edge_lengths) // 10000)]
-            )
+            sample = random.sample(all_edge_lengths, min(len(all_edge_lengths), 10000))
             median_length = statistics.median(sample)
             recommended_merge = round(median_length * 0.001, 4)
             recommended_merge = max(recommended_merge, 0.0001)
@@ -853,7 +851,7 @@ class AIOPT_OT_analyze_mesh(Operator):
             target = self._PRESET_TARGETS.get(props.analysis_target_preset, 25000)
 
         ratio = round(min(max(target / max(total_faces, 1), 0.01), 1.0), 3)
-        thin_pct = (thin_faces + zero_faces) / max(total_faces, 1) * 100
+        thin_pct = thin_faces / max(total_faces, 1) * 100
 
         # Write results
         state.has_results = True
