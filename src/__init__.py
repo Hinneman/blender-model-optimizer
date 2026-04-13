@@ -30,6 +30,7 @@ bl_info = {
 import bpy
 
 from .operators import (
+    AIOPT_OT_analyze_mesh,
     AIOPT_OT_cancel_pipeline,
     AIOPT_OT_clean_images,
     AIOPT_OT_clean_unused,
@@ -39,6 +40,7 @@ from .operators import (
     AIOPT_OT_fix_geometry,
     AIOPT_OT_load_defaults,
     AIOPT_OT_remove_interior,
+    AIOPT_OT_remove_small_pieces,
     AIOPT_OT_reset_defaults,
     AIOPT_OT_resize_textures,
     AIOPT_OT_run_all,
@@ -54,17 +56,20 @@ from .panels import (
     AIOPT_PT_presets_panel,
     AIOPT_PT_progress_panel,
     AIOPT_PT_remove_interior_panel,
+    AIOPT_PT_small_pieces_panel,
     AIOPT_PT_symmetry_panel,
     AIOPT_PT_textures_panel,
 )
-from .properties import AIOPT_PipelineState, AIOPT_Properties
+from .properties import AIOPT_AnalysisState, AIOPT_PipelineState, AIOPT_Properties
 from .utils import load_defaults
 
 classes = (
     AIOPT_Properties,
     AIOPT_PipelineState,
+    AIOPT_AnalysisState,
     AIOPT_OT_fix_geometry,
     AIOPT_OT_remove_interior,
+    AIOPT_OT_remove_small_pieces,
     AIOPT_OT_symmetry_mirror,
     AIOPT_OT_decimate,
     AIOPT_OT_clean_images,
@@ -75,6 +80,7 @@ classes = (
     AIOPT_OT_cancel_pipeline,
     AIOPT_OT_dismiss_pipeline,
     AIOPT_OT_show_stats,
+    AIOPT_OT_analyze_mesh,
     AIOPT_OT_save_defaults,
     AIOPT_OT_load_defaults,
     AIOPT_OT_reset_defaults,
@@ -82,6 +88,7 @@ classes = (
     AIOPT_PT_progress_panel,
     AIOPT_PT_geometry_panel,
     AIOPT_PT_remove_interior_panel,
+    AIOPT_PT_small_pieces_panel,
     AIOPT_PT_symmetry_panel,
     AIOPT_PT_decimate_panel,
     AIOPT_PT_textures_panel,
@@ -103,6 +110,7 @@ def register():
         bpy.utils.register_class(cls)
     bpy.types.Scene.ai_optimizer = bpy.props.PointerProperty(type=AIOPT_Properties)
     bpy.types.WindowManager.ai_optimizer_pipeline = bpy.props.PointerProperty(type=AIOPT_PipelineState)
+    bpy.types.WindowManager.ai_optimizer_analysis = bpy.props.PointerProperty(type=AIOPT_AnalysisState)
 
     # Auto-load defaults when opening files or on fresh startup
     if _load_defaults_on_file not in bpy.app.handlers.load_post:
@@ -127,6 +135,7 @@ def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     del bpy.types.WindowManager.ai_optimizer_pipeline
+    del bpy.types.WindowManager.ai_optimizer_analysis
     del bpy.types.Scene.ai_optimizer
     print("[AI Model Optimizer] Add-on unregistered")
 
