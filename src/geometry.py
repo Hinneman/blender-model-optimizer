@@ -296,7 +296,7 @@ def remove_small_pieces_single(context, obj, props):
         context.view_layer.objects.active = remaining[0]
         if len(remaining) > 1:
             bpy.ops.object.join()
-        context.view_layer.objects.active.name = original_name
+        remaining[0].name = original_name
 
     faces_after = (
         len(context.view_layer.objects.active.data.polygons)
