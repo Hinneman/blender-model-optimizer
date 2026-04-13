@@ -273,6 +273,8 @@ class AIOPT_OT_run_all(Operator):
     _step_start_time: float
     _faces_before: int  # for decimate summary
     _interior_removed: int
+    _small_pieces_deleted: int
+    _small_pieces_faces_removed: int
 
     @classmethod
     def poll(cls, context):
@@ -601,7 +603,7 @@ class AIOPT_OT_run_all(Operator):
         return obj.name
 
     def _teardown_remove_small_pieces(self, context):
-        return f"Removed {self._small_pieces_deleted} piece(s), {self._small_pieces_faces_removed:,} faces"
+        return f"Removed {self._small_pieces_deleted:,} piece(s), {self._small_pieces_faces_removed:,} faces"
 
     # -- Symmetry Mirror --
 
@@ -929,7 +931,7 @@ class AIOPT_OT_remove_small_pieces(Operator):
             total_parts += parts
             total_faces += faces
 
-        self.report({"INFO"}, f"Removed {total_parts} small piece(s), {total_faces:,} faces")
+        self.report({"INFO"}, f"Removed {total_parts:,} small piece(s), {total_faces:,} faces")
         return {"FINISHED"}
 
 
