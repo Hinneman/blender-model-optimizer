@@ -229,6 +229,83 @@ def remove_interior_single(context, obj, props):
     return _remove_interior_loose_parts(context, obj)
 
 
+def remove_small_pieces_single(context, obj, props):
+    """Delete disconnected mesh islands below face count or volume threshold.
+
+    A loose part is deleted if ``face_count < face_threshold`` OR
+    ``volume < volume_threshold``.  Uses absolute volume so inverted
+    normals don't produce false negatives.
+
+    Returns ``(parts_deleted, faces_removed)``.
+    """
+    import bmesh
+
+    face_threshold = props.small_pieces_face_threshold
+    volume_threshold = props.small_pieces_volume_threshold
+
+    faces_before = len(obj.data.polygons)
+    original_name = obj.name
+
+    bpy.ops.object.select_all(action="DESELECT")
+    context.view_layer.objects.active = obj
+    obj.select_set(True)
+
+    existing_objects = set(context.scene.objects)
+
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.separate(type="LOOSE")
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    parts = [
+        o for o in context.scene.objects
+        if o.type == "MESH" and (o == obj or o not in existing_objects)
+    ]
+
+    if len(parts) <= 1:
+        # Single connected mesh — nothing to separate
+        return (0, 0)
+
+    to_delete = []
+    for part in parts:
+        face_count = len(part.data.polygons)
+
+        bm = bmesh.new()
+        bm.from_mesh(part.data)
+        volume = abs(bm.calc_volume())
+        bm.free()
+
+        if face_count < face_threshold or volume < volume_threshold:
+            to_delete.append(part)
+
+    # Safety: never delete all parts — keep the largest if everything qualifies
+    if len(to_delete) == len(parts):
+        largest = max(parts, key=lambda o: len(o.data.polygons))
+        to_delete = [o for o in to_delete if o != largest]
+
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj_del in to_delete:
+        obj_del.select_set(True)
+    if to_delete:
+        bpy.ops.object.delete()
+
+    remaining = [o for o in parts if o not in to_delete]
+    if remaining:
+        bpy.ops.object.select_all(action="DESELECT")
+        for o in remaining:
+            o.select_set(True)
+        context.view_layer.objects.active = remaining[0]
+        if len(remaining) > 1:
+            bpy.ops.object.join()
+        context.view_layer.objects.active.name = original_name
+
+    faces_after = (
+        len(context.view_layer.objects.active.data.polygons)
+        if context.view_layer.objects.active
+        else 0
+    )
+    return (len(to_delete), faces_before - faces_after)
+
+
 def detect_and_apply_symmetry(context, obj, axis="X", threshold=0.001, min_score=0.85):
     """Detect near-symmetric geometry and apply a mirror optimization.
 
