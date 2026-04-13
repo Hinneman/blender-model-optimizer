@@ -171,6 +171,12 @@ SAVEABLE_PROPS = [
     "symmetry_axis",
     "symmetry_threshold",
     "symmetry_min_score",
+
+    "run_remove_small_pieces",
+    "small_pieces_face_threshold",
+    "small_pieces_volume_threshold",
+    "analysis_target_preset",
+    "analysis_target_faces",
 ]
 
 
