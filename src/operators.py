@@ -11,6 +11,7 @@ from .geometry import (
     detect_and_apply_symmetry,
     fix_geometry_single,
     remove_interior_single,
+    remove_small_pieces_single,  # noqa: F401
 )
 from .materials import join_meshes_by_material, merge_duplicate_materials
 from .textures import (
@@ -25,6 +26,7 @@ from .utils import (
     generate_lods,
     get_config_path,
     get_selected_meshes,
+    is_print3d_available,  # noqa: F401
     load_defaults,
     save_defaults,
 )
@@ -770,6 +772,107 @@ class AIOPT_OT_show_stats(Operator):
         for area in context.screen.areas:
             if area.type == "VIEW_3D":
                 area.tag_redraw()
+        return {"FINISHED"}
+
+
+class AIOPT_OT_analyze_mesh(Operator):
+    bl_idname = "ai_optimizer.analyze_mesh"
+    bl_label = "Run Analysis"
+    bl_description = "Analyze mesh problems and generate optimization recommendations"
+    bl_options = {"REGISTER"}
+
+    _PRESET_TARGETS = {"MOBILE": 5000, "WEB": 25000, "DESKTOP": 75000}
+
+    def execute(self, context):
+        import statistics
+
+        import bmesh
+
+        props = context.scene.ai_optimizer
+        state = context.window_manager.ai_optimizer_analysis
+        meshes = get_selected_meshes()
+
+        if not meshes:
+            self.report({"ERROR"}, "No mesh objects found")
+            return {"CANCELLED"}
+
+        if context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+
+        total_faces = 0
+        non_manifold_edges = 0
+        zero_edges = 0
+        zero_faces = 0
+        thin_faces = 0
+        all_edge_lengths = []
+        THIN_THRESHOLD = 0.0001  # m²
+
+        for obj in meshes:
+            bm = bmesh.new()
+            bm.from_mesh(obj.data)
+            bm.edges.ensure_lookup_table()
+            bm.faces.ensure_lookup_table()
+
+            total_faces += len(bm.faces)
+
+            for edge in bm.edges:
+                length = edge.calc_length()
+                all_edge_lengths.append(length)
+                if not edge.is_manifold:
+                    non_manifold_edges += 1
+                if length == 0.0:
+                    zero_edges += 1
+
+            for face in bm.faces:
+                area = face.calc_area()
+                if area == 0.0:
+                    zero_faces += 1
+                elif area < THIN_THRESHOLD:
+                    thin_faces += 1
+
+            bm.free()
+
+        # Merge distance: median edge length x 0.1%
+        # Sample up to 10,000 edges to stay fast on large meshes
+        if all_edge_lengths:
+            sample = (
+                all_edge_lengths
+                if len(all_edge_lengths) <= 10000
+                else [all_edge_lengths[i] for i in range(0, len(all_edge_lengths), len(all_edge_lengths) // 10000)]
+            )
+            median_length = statistics.median(sample)
+            recommended_merge = round(median_length * 0.001, 4)
+            recommended_merge = max(recommended_merge, 0.0001)
+        else:
+            recommended_merge = 0.0001
+
+        # Decimate ratio from target
+        if props.analysis_target_preset == "CUSTOM":
+            target = props.analysis_target_faces
+        else:
+            target = self._PRESET_TARGETS.get(props.analysis_target_preset, 25000)
+
+        ratio = round(min(max(target / max(total_faces, 1), 0.01), 1.0), 3)
+        thin_pct = (thin_faces + zero_faces) / max(total_faces, 1) * 100
+
+        # Write results
+        state.has_results = True
+        state.total_faces = total_faces
+        state.non_manifold_edges = non_manifold_edges
+        state.zero_edges = zero_edges
+        state.zero_faces = zero_faces
+        state.thin_faces = thin_faces
+        state.thin_face_pct = round(thin_pct, 1)
+        state.intersecting_faces = 0
+        state.intersecting_faces_available = False
+        state.recommended_ratio = ratio
+        state.recommended_merge_distance = recommended_merge
+
+        for area in context.screen.areas:
+            if area.type == "VIEW_3D":
+                area.tag_redraw()
+
+        self.report({"INFO"}, f"Analysis complete — {total_faces:,} faces, recommended ratio: {ratio}")
         return {"FINISHED"}
 
 
