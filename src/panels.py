@@ -62,7 +62,41 @@ class AIOPT_PT_main_panel(Panel):
             else:
                 col.label(text="3D Print Toolbox: not found", icon="ERROR")
 
+            col.separator()
             col.operator("ai_optimizer.show_stats", icon="FILE_REFRESH")
+
+            # --- Analysis ---
+            col.separator()
+            col.label(text="Mesh Analysis:", icon="VIEWZOOM")
+            row = col.row(align=True)
+            row.prop(props, "analysis_target_preset", text="")
+            if props.analysis_target_preset == "CUSTOM":
+                col.prop(props, "analysis_target_faces")
+            col.operator("ai_optimizer.analyze_mesh", icon="VIEWZOOM")
+
+            analysis = context.window_manager.ai_optimizer_analysis
+            if analysis.has_results:
+                col.separator()
+                col.label(text="Issues found:", icon="INFO")
+
+                def _issue_row(label, count):
+                    row = col.row()
+                    row.label(
+                        text=f"  {label}: {count:,}",
+                        icon="CHECKMARK" if count == 0 else "ERROR",
+                    )
+
+                _issue_row("Non-manifold edges", analysis.non_manifold_edges)
+                _issue_row("Zero edges", analysis.zero_edges)
+                _issue_row("Zero faces", analysis.zero_faces)
+                _issue_row("Thin faces", analysis.thin_faces)
+
+                col.separator()
+                col.label(text="Recommendations:", icon="LIGHT")
+                col.label(text=f"  Decimate ratio: {analysis.recommended_ratio:.3f}")
+                if analysis.thin_face_pct > 5.0:
+                    col.label(text=f"  ({analysis.thin_face_pct:.0f}% thin — can push lower)")
+                col.label(text=f"  Merge distance: {analysis.recommended_merge_distance:.4f} m")
         else:
             layout.label(text="No mesh objects found", icon="ERROR")
 
@@ -279,6 +313,42 @@ class AIOPT_PT_remove_interior_panel(Panel):
 
         layout.separator()
         layout.operator("ai_optimizer.remove_interior", icon="MESH_DATA")
+
+
+class AIOPT_PT_small_pieces_panel(Panel):
+    bl_label = "Remove Small Pieces"
+    bl_idname = "AIOPT_PT_small_pieces_panel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "AI Optimizer"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context):
+        state = context.window_manager.ai_optimizer_pipeline
+        return not state.is_running and state.step_results == "[]"
+
+    def draw_header(self, context):
+        props = context.scene.ai_optimizer
+        self.layout.prop(props, "run_remove_small_pieces", text="")
+
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.ai_optimizer
+
+        col = layout.column(align=True)
+        col.prop(props, "small_pieces_face_threshold")
+        col.prop(props, "small_pieces_volume_threshold")
+
+        box = layout.box()
+        help_col = box.column(align=True)
+        help_col.scale_y = 0.8
+        help_col.label(text="Deletes loose parts smaller than", icon="INFO")
+        help_col.label(text="either threshold. Targets floating")
+        help_col.label(text="debris in AI-generated models.")
+
+        layout.separator()
+        layout.operator("ai_optimizer.remove_small_pieces", icon="MESH_DATA")
 
 
 class AIOPT_PT_symmetry_panel(Panel):
