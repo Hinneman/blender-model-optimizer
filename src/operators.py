@@ -11,7 +11,7 @@ from .geometry import (
     detect_and_apply_symmetry,
     fix_geometry_single,
     remove_interior_single,
-    remove_small_pieces_single,  # noqa: F401
+    remove_small_pieces_single,
 )
 from .materials import join_meshes_by_material, merge_duplicate_materials
 from .textures import (
@@ -308,6 +308,15 @@ class AIOPT_OT_run_all(Operator):
                     self._teardown_remove_interior,
                 )
             )
+        if props.run_remove_small_pieces:
+            self._steps.append(
+                (
+                    "Remove Small Pieces",
+                    self._setup_remove_small_pieces,
+                    self._tick_remove_small_pieces,
+                    self._teardown_remove_small_pieces,
+                )
+            )
         if props.run_symmetry:
             self._steps.append(
                 (
@@ -572,6 +581,27 @@ class AIOPT_OT_run_all(Operator):
 
     def _teardown_remove_interior(self, context):
         return f"Removed {self._interior_removed:,} interior faces"
+
+    # -- Remove Small Pieces --
+
+    def _setup_remove_small_pieces(self, context):
+        if context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        self._sub_items = get_selected_meshes()
+        self._small_pieces_deleted = 0
+        self._small_pieces_faces_removed = 0
+        return len(self._sub_items)
+
+    def _tick_remove_small_pieces(self, context, index):
+        props = context.scene.ai_optimizer
+        obj = self._sub_items[index]
+        parts, faces = remove_small_pieces_single(context, obj, props)
+        self._small_pieces_deleted += parts
+        self._small_pieces_faces_removed += faces
+        return obj.name
+
+    def _teardown_remove_small_pieces(self, context):
+        return f"Removed {self._small_pieces_deleted} piece(s), {self._small_pieces_faces_removed:,} faces"
 
     # -- Symmetry Mirror --
 
@@ -871,6 +901,35 @@ class AIOPT_OT_analyze_mesh(Operator):
                 area.tag_redraw()
 
         self.report({"INFO"}, f"Analysis complete — {total_faces:,} faces, recommended ratio: {ratio}")
+        return {"FINISHED"}
+
+
+class AIOPT_OT_remove_small_pieces(Operator):
+    bl_idname = "ai_optimizer.remove_small_pieces"
+    bl_label = "Remove Small Pieces"
+    bl_description = "Delete disconnected mesh islands below face count or volume threshold"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        props = context.scene.ai_optimizer
+        meshes = get_selected_meshes()
+
+        if not meshes:
+            self.report({"ERROR"}, "No mesh objects found")
+            return {"CANCELLED"}
+
+        if context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+
+        total_parts = 0
+        total_faces = 0
+
+        for obj in meshes:
+            parts, faces = remove_small_pieces_single(context, obj, props)
+            total_parts += parts
+            total_faces += faces
+
+        self.report({"INFO"}, f"Removed {total_parts} small piece(s), {total_faces:,} faces")
         return {"FINISHED"}
 
 
