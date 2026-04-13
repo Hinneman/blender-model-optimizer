@@ -26,13 +26,13 @@ class AIOPT_Properties(PropertyGroup):
     run_export: BoolProperty(name="Export GLB", default=True, description="Export optimized GLB")
 
     # -- Geometry settings --
-    merge_distance: FloatProperty(
-        name="Merge Distance",
-        default=0.0001,
-        min=0.00001,
-        max=1.0,
-        precision=5,
-        description="Merge vertices closer than this distance",
+    merge_distance_mm: FloatProperty(
+        name="Merge Distance (mm)",
+        default=0.1,
+        min=0.01,
+        max=1000.0,
+        precision=2,
+        description="Merge vertices closer than this distance in millimeters",
     )
     recalculate_normals: BoolProperty(name="Recalculate Normals", default=True, description="Fix flipped normals")
     fix_manifold: BoolProperty(
@@ -45,13 +45,13 @@ class AIOPT_Properties(PropertyGroup):
         default=True,
         description="Merge materials with identical shader setups (same textures and values)",
     )
-    merge_materials_threshold: FloatProperty(
-        name="Material Threshold",
-        default=0.01,
-        min=0.001,
-        max=0.1,
-        precision=3,
-        description="Color/value tolerance when comparing material properties",
+    merge_materials_threshold_pct: FloatProperty(
+        name="Material Tolerance (%)",
+        default=1.0,
+        min=0.1,
+        max=10.0,
+        precision=1,
+        description="Color/value tolerance when comparing materials (percent)",
     )
     join_meshes: BoolProperty(
         name="Join Meshes",
@@ -107,13 +107,13 @@ class AIOPT_Properties(PropertyGroup):
         default="X",
         description="Axis to test symmetry along",
     )
-    symmetry_threshold: FloatProperty(
-        name="Threshold",
-        default=0.001,
-        min=0.0001,
-        max=0.1,
-        precision=4,
-        description="Max distance between a vertex and its mirror to count as matched",
+    symmetry_threshold_mm: FloatProperty(
+        name="Threshold (mm)",
+        default=1.0,
+        min=0.1,
+        max=100.0,
+        precision=1,
+        description="Max distance between a vertex and its mirror to count as matched (mm)",
     )
     symmetry_min_score: FloatProperty(
         name="Min Score",
@@ -163,13 +163,13 @@ class AIOPT_Properties(PropertyGroup):
         default="1024",
         description="Resolution of the baked normal map",
     )
-    normal_map_cage_extrusion: FloatProperty(
-        name="Cage Extrusion",
-        default=0.01,
-        min=0.001,
-        max=1.0,
-        precision=3,
-        description="Ray distance for baking from high-poly to low-poly surface",
+    cage_extrusion_mm: FloatProperty(
+        name="Cage Extrusion (mm)",
+        default=10.0,
+        min=1.0,
+        max=1000.0,
+        precision=1,
+        description="Ray distance for baking from high-poly to low-poly surface (mm)",
     )
 
     # -- Texture settings --
@@ -316,13 +316,13 @@ class AIOPT_Properties(PropertyGroup):
         max=10000,
         description="Delete loose parts with fewer than this many faces",
     )
-    small_pieces_volume_threshold: FloatProperty(
-        name="Min Volume",
-        default=0.0001,
+    small_pieces_size_threshold: FloatProperty(
+        name="Min Size (cm)",
+        default=1.0,
         min=0.0,
-        max=100.0,
-        precision=6,
-        description="Delete loose parts with volume smaller than this (m³)",
+        max=50.0,
+        precision=1,
+        description="Delete loose parts smaller than this cube edge length in centimeters",
     )
 
 
@@ -339,6 +339,9 @@ class AIOPT_PipelineState(PropertyGroup):
     total_elapsed: FloatProperty(default=0.0)
     total_steps: IntProperty(default=0)
     step_names: StringProperty(default="[]")  # JSON array of step names
+    faces_before: IntProperty(default=0)
+    faces_after: IntProperty(default=0)
+    export_size: StringProperty(default="")
 
 
 class AIOPT_AnalysisState(PropertyGroup):

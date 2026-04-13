@@ -60,7 +60,7 @@ class AIOPT_OT_fix_geometry(Operator):
         # Material merge (operates on all materials, not per-object)
         mat_merged = 0
         if props.merge_materials:
-            mat_merged, _detail = merge_duplicate_materials(context, props.merge_materials_threshold)
+            mat_merged, _detail = merge_duplicate_materials(context, props.merge_materials_threshold_pct / 100.0)
 
         # Mesh join
         join_detail = ""
@@ -125,7 +125,7 @@ class AIOPT_OT_symmetry_mirror(Operator):
         applied = 0
         for obj in meshes:
             was_applied, _score = detect_and_apply_symmetry(
-                context, obj, props.symmetry_axis, props.symmetry_threshold, props.symmetry_min_score
+                context, obj, props.symmetry_axis, props.symmetry_threshold_mm / 1000.0, props.symmetry_min_score
             )
             if was_applied:
                 applied += 1
@@ -330,9 +330,23 @@ class AIOPT_OT_run_all(Operator):
         if props.run_decimate:
             self._steps.append(("Decimate", self._setup_decimate, self._tick_decimate, self._teardown_decimate))
         if props.run_clean_images:
-            self._steps.append(("Clean Images", self._setup_clean_images, self._tick_clean_images, self._teardown_noop))
+            self._steps.append(
+                (
+                    "Clean Images",
+                    self._setup_clean_images,
+                    self._tick_clean_images,
+                    self._teardown_clean_images,
+                )
+            )
         if props.run_clean_unused:
-            self._steps.append(("Clean Unused", self._setup_clean_unused, self._tick_clean_unused, self._teardown_noop))
+            self._steps.append(
+                (
+                    "Clean Unused",
+                    self._setup_clean_unused,
+                    self._tick_clean_unused,
+                    self._teardown_clean_unused,
+                )
+            )
         if props.run_resize_textures:
             self._steps.append(
                 (
@@ -345,7 +359,7 @@ class AIOPT_OT_run_all(Operator):
         if props.run_lod:
             self._steps.append(("LOD Generation", self._setup_lod, self._tick_lod, self._teardown_lod))
         if props.run_export:
-            self._steps.append(("Export GLB", self._setup_export, self._tick_export, self._teardown_noop))
+            self._steps.append(("Export GLB", self._setup_export, self._tick_export, self._teardown_export))
 
         if not self._steps:
             self.report({"WARNING"}, "No pipeline steps enabled")
@@ -370,6 +384,9 @@ class AIOPT_OT_run_all(Operator):
         state.total_elapsed = 0.0
         state.total_steps = len(self._steps)
         state.step_names = json.dumps([s[0] for s in self._steps])
+        state.faces_before = count_faces(get_selected_meshes())
+        state.faces_after = 0
+        state.export_size = ""
 
         # First modal tick will run setup — don't do it here so the UI
         # has a chance to redraw and show the progress panel first.
@@ -480,6 +497,7 @@ class AIOPT_OT_run_all(Operator):
 
     def _finish(self, context):
         state = context.window_manager.ai_optimizer_pipeline
+        state.faces_after = count_faces(get_selected_meshes())
         state.is_running = False
         state.total_elapsed = round(time.monotonic() - self._start_time, 2)
         state.current_step_name = ""
@@ -549,20 +567,23 @@ class AIOPT_OT_run_all(Operator):
         count = self._fix_count
         method = self._fix_method
         total = len(self._sub_items)
+        lines = []
         detail = f"{count}/{total} fixed"
         if method != "none":
-            detail += f" — method: {method}"
+            short = method.split("(")[0].strip()
+            detail += f" ({short})"
+        lines.append(detail)
 
         if props.merge_materials:
-            mat_count, _d = merge_duplicate_materials(context, props.merge_materials_threshold)
-            detail += f", {mat_count} materials merged"
+            mat_count, _d = merge_duplicate_materials(context, props.merge_materials_threshold_pct / 100.0)
+            lines.append(f"{mat_count} material(s) merged")
 
         if props.join_meshes:
             meshes = get_selected_meshes()
             _result, join_d = join_meshes_by_material(context, meshes, props.join_mode)
-            detail += f", {join_d}"
+            lines.append(join_d)
 
-        return detail
+        return "\n".join(lines)
 
     # -- Remove Interior --
 
@@ -618,7 +639,7 @@ class AIOPT_OT_run_all(Operator):
         props = context.scene.ai_optimizer
         obj = self._sub_items[index]
         applied, score = detect_and_apply_symmetry(
-            context, obj, props.symmetry_axis, props.symmetry_threshold, props.symmetry_min_score
+            context, obj, props.symmetry_axis, props.symmetry_threshold_mm / 1000.0, props.symmetry_min_score
         )
         if applied:
             self._symmetry_applied += 1
@@ -658,7 +679,7 @@ class AIOPT_OT_run_all(Operator):
         meshes = get_selected_meshes()
         faces_after = count_faces(meshes)
         reduction = (1 - faces_after / max(self._faces_before, 1)) * 100
-        detail = f"{self._faces_before:,} → {faces_after:,} faces ({reduction:.1f}% reduction)"
+        lines = [f"{self._faces_before:,} → {faces_after:,} faces ({reduction:.1f}%)"]
 
         if props.bake_normal_map and self._highpoly_copies:
             baked = 0
@@ -672,29 +693,39 @@ class AIOPT_OT_run_all(Operator):
             for copy in self._highpoly_copies.values():
                 bpy.data.objects.remove(copy, do_unlink=True)
             self._highpoly_copies = {}
-            detail += f", {baked} normal map(s) baked"
+            lines.append(f"{baked} normal map(s) baked")
 
-        return detail
+        return "\n".join(lines)
 
     # -- Clean Images --
 
     def _setup_clean_images(self, context):
         self._sub_items = [None]  # single item
+        self._clean_detail = ""
         return 1
 
     def _tick_clean_images(self, context, index):
         _removed, detail = clean_images_all(context)
+        self._clean_detail = detail
         return detail
+
+    def _teardown_clean_images(self, context):
+        return self._clean_detail
 
     # -- Clean Unused --
 
     def _setup_clean_unused(self, context):
         self._sub_items = [None]
+        self._unused_detail = ""
         return 1
 
     def _tick_clean_unused(self, context, index):
         _removed, detail = clean_unused_all(context)
+        self._unused_detail = detail
         return detail
+
+    def _teardown_clean_unused(self, context):
+        return self._unused_detail
 
     # -- Resize Textures --
 
@@ -747,12 +778,20 @@ class AIOPT_OT_run_all(Operator):
 
     def _setup_export(self, context):
         self._sub_items = [None]
+        self._export_detail = ""
         return 1
 
     def _tick_export(self, context, index):
         props = context.scene.ai_optimizer
-
         detail = export_glb_all(context, props)
+        self._export_detail = detail
+        return detail
+
+    def _teardown_export(self, context):
+        state = context.window_manager.ai_optimizer_pipeline
+        detail = self._export_detail
+        if "(" in detail and ")" in detail:
+            state.export_size = detail[detail.rfind("(") + 1 : detail.rfind(")")]
         return detail
 
 
@@ -790,6 +829,9 @@ class AIOPT_OT_dismiss_pipeline(Operator):
         state.total_elapsed = 0.0
         state.current_step_index = 0
         state.total_steps = 0
+        state.faces_before = 0
+        state.faces_after = 0
+        state.export_size = ""
         return {"FINISHED"}
 
 

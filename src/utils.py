@@ -76,8 +76,8 @@ def estimate_glb_size(meshes, props):
         geo_bytes *= 0.6
 
     if props.use_draco:
-        # Draco compression factor: ~2x at level 0, ~6x at level 10
-        draco_factor = 2.0 + (props.draco_level / 10.0) * 4.0
+        # Draco compression factor: ~6x at level 0, ~30x at level 10
+        draco_factor = 6.0 + (props.draco_level / 10.0) * 24.0
         geo_bytes /= draco_factor
 
     # -- Textures --
@@ -106,21 +106,28 @@ def estimate_glb_size(meshes, props):
         raw = w * h * 4  # RGBA
         fmt = props.image_format
         if fmt == "WEBP":
-            # quality=100 → ratio ~8 (light compression), quality=1 → ratio ~40 (heavy)
-            ratio = 8.0 + (1.0 - props.image_quality / 100.0) * 32.0
+            # quality=100 → ratio ~15, quality=1 → ratio ~80
+            ratio = 15.0 + (1.0 - props.image_quality / 100.0) * 65.0
             tex_bytes += raw / ratio
         elif fmt == "JPEG":
-            # quality=100 → ratio ~5 (light compression), quality=1 → ratio ~30 (heavy)
-            ratio = 5.0 + (1.0 - props.image_quality / 100.0) * 25.0
+            # quality=100 → ratio ~10, quality=1 → ratio ~50
+            ratio = 10.0 + (1.0 - props.image_quality / 100.0) * 40.0
             tex_bytes += raw / ratio
         else:  # NONE (PNG)
             tex_bytes += raw / 5.0
 
-    # Normal map bake adds a texture
+    # Normal map bake adds a texture (compressed with same image format)
     if props.bake_normal_map:
         nmap_res = int(props.normal_map_resolution)
-        # Normal maps compress well (~4:1 from raw RGB)
-        tex_bytes += nmap_res * nmap_res * 3 / 4.0
+        nmap_raw = nmap_res * nmap_res * 3
+        fmt = props.image_format
+        if fmt == "WEBP":
+            nmap_ratio = 15.0 + (1.0 - props.image_quality / 100.0) * 65.0
+        elif fmt == "JPEG":
+            nmap_ratio = 10.0 + (1.0 - props.image_quality / 100.0) * 40.0
+        else:
+            nmap_ratio = 5.0
+        tex_bytes += nmap_raw / nmap_ratio
 
     # -- Overhead (GLB container, materials, scene graph) --
     overhead = 10 * 1024
@@ -136,11 +143,11 @@ SAVEABLE_PROPS = [
     "run_clean_unused",
     "run_resize_textures",
     "run_export",
-    "merge_distance",
+    "merge_distance_mm",
     "recalculate_normals",
     "fix_manifold",
     "merge_materials",
-    "merge_materials_threshold",
+    "merge_materials_threshold_pct",
     "join_meshes",
     "join_mode",
     "run_remove_interior",
@@ -149,7 +156,7 @@ SAVEABLE_PROPS = [
     "decimate_ratio",
     "bake_normal_map",
     "normal_map_resolution",
-    "normal_map_cage_extrusion",
+    "cage_extrusion_mm",
     "max_texture_size",
     "resize_mode",
     "output_filename",
@@ -166,15 +173,13 @@ SAVEABLE_PROPS = [
     "lod_levels",
     "lod_suffix_pattern",
     "lod_ratios",
-
     "run_symmetry",
     "symmetry_axis",
-    "symmetry_threshold",
+    "symmetry_threshold_mm",
     "symmetry_min_score",
-
     "run_remove_small_pieces",
     "small_pieces_face_threshold",
-    "small_pieces_volume_threshold",
+    "small_pieces_size_threshold",
     "analysis_target_preset",
     "analysis_target_faces",
 ]

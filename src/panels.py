@@ -96,7 +96,7 @@ class AIOPT_PT_main_panel(Panel):
                 col.label(text=f"  Decimate ratio: {analysis.recommended_ratio:.3f}")
                 if analysis.thin_face_pct > 5.0:
                     col.label(text=f"  ({analysis.thin_face_pct:.0f}% thin — can push lower)")
-                col.label(text=f"  Merge distance: {analysis.recommended_merge_distance:.4f} m")
+                col.label(text=f"  Merge distance: {analysis.recommended_merge_distance * 1000:.1f} mm")
         else:
             layout.label(text="No mesh objects found", icon="ERROR")
 
@@ -180,8 +180,21 @@ class AIOPT_PT_progress_panel(Panel):
         layout.operator("ai_optimizer.cancel_pipeline", icon="CANCEL")
 
     def _draw_completed(self, layout, state, results):
-        col = layout.column(align=True)
+        # Summary box
+        if state.faces_before > 0:
+            box = layout.box()
+            col = box.column(align=True)
+            col.label(text="Result", icon="CHECKMARK")
+            reduction = (1 - state.faces_after / max(state.faces_before, 1)) * 100
+            col.label(text=f"Faces: {state.faces_before:,} \u2192 {state.faces_after:,} ({reduction:.1f}%)")
+            if state.export_size:
+                col.label(text=f"Export: {state.export_size}")
+            col.label(text=f"Time: {state.total_elapsed:.1f}s")
 
+        layout.separator()
+
+        # Step details
+        col = layout.column(align=True)
         for r in results:
             row = col.row()
             row.label(
@@ -189,11 +202,11 @@ class AIOPT_PT_progress_panel(Panel):
                 icon="CHECKMARK",
             )
             if r.get("detail"):
-                row = col.row()
-                row.label(text=f"    {r['detail']}")
-
-        col.separator()
-        col.label(text=f"Total: {state.total_elapsed:.1f}s")
+                for line in r["detail"].split("\n"):
+                    line = line.strip()
+                    if line:
+                        row = col.row()
+                        row.label(text=f"    {line}")
 
         layout.operator("ai_optimizer.dismiss_pipeline", icon="X")
 
@@ -240,7 +253,7 @@ class AIOPT_PT_geometry_panel(Panel):
         props = context.scene.ai_optimizer
 
         col = layout.column(align=True)
-        col.prop(props, "merge_distance")
+        col.prop(props, "merge_distance_mm")
         col.prop(props, "recalculate_normals")
         col.prop(props, "fix_manifold")
 
@@ -265,7 +278,7 @@ class AIOPT_PT_geometry_panel(Panel):
         col.label(text="Cleanup:", icon="MATERIAL")
         col.prop(props, "merge_materials")
         if props.merge_materials:
-            col.prop(props, "merge_materials_threshold")
+            col.prop(props, "merge_materials_threshold_pct")
         col.prop(props, "join_meshes")
         if props.join_meshes:
             col.prop(props, "join_mode", text="")
@@ -338,7 +351,7 @@ class AIOPT_PT_small_pieces_panel(Panel):
 
         col = layout.column(align=True)
         col.prop(props, "small_pieces_face_threshold")
-        col.prop(props, "small_pieces_volume_threshold")
+        col.prop(props, "small_pieces_size_threshold")
 
         box = layout.box()
         help_col = box.column(align=True)
@@ -374,7 +387,7 @@ class AIOPT_PT_symmetry_panel(Panel):
 
         col = layout.column(align=True)
         col.prop(props, "symmetry_axis")
-        col.prop(props, "symmetry_threshold")
+        col.prop(props, "symmetry_threshold_mm")
         col.prop(props, "symmetry_min_score", slider=True)
 
         box = layout.box()
@@ -428,7 +441,7 @@ class AIOPT_PT_decimate_panel(Panel):
         col.prop(props, "bake_normal_map")
         if props.bake_normal_map:
             col.prop(props, "normal_map_resolution", text="")
-            col.prop(props, "normal_map_cage_extrusion")
+            col.prop(props, "cage_extrusion_mm")
             box = layout.box()
             warn_col = box.column(align=True)
             warn_col.scale_y = 0.8

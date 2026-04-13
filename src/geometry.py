@@ -20,7 +20,7 @@ def fix_geometry_single(context, obj, props):
     bpy.ops.mesh.select_all(action="SELECT")
 
     # Merge close vertices
-    bpy.ops.mesh.remove_doubles(threshold=props.merge_distance)
+    bpy.ops.mesh.remove_doubles(threshold=props.merge_distance_mm / 1000.0)
 
     # Recalculate normals
     if props.recalculate_normals:
@@ -241,7 +241,8 @@ def remove_small_pieces_single(context, obj, props):
     import bmesh
 
     face_threshold = props.small_pieces_face_threshold
-    volume_threshold = props.small_pieces_volume_threshold
+    # Convert cm edge length to m³ volume: (cm / 100)³
+    volume_threshold = (props.small_pieces_size_threshold / 100.0) ** 3
 
     faces_before = len(obj.data.polygons)
     original_name = obj.name
@@ -256,10 +257,7 @@ def remove_small_pieces_single(context, obj, props):
     bpy.ops.mesh.separate(type="LOOSE")
     bpy.ops.object.mode_set(mode="OBJECT")
 
-    parts = [
-        o for o in context.scene.objects
-        if o.type == "MESH" and (o == obj or o not in existing_objects)
-    ]
+    parts = [o for o in context.scene.objects if o.type == "MESH" and (o == obj or o not in existing_objects)]
 
     if len(parts) <= 1:
         # Single connected mesh — nothing to separate
@@ -298,11 +296,7 @@ def remove_small_pieces_single(context, obj, props):
             bpy.ops.object.join()
         remaining[0].name = original_name
 
-    faces_after = (
-        len(context.view_layer.objects.active.data.polygons)
-        if context.view_layer.objects.active
-        else 0
-    )
+    faces_after = len(context.view_layer.objects.active.data.polygons) if context.view_layer.objects.active else 0
     return (len(to_delete), faces_before - faces_after)
 
 
@@ -434,7 +428,7 @@ def bake_normal_map_for_decimate(context, obj, highpoly, props):
         bpy.ops.object.bake(
             type="NORMAL",
             use_selected_to_active=True,
-            cage_extrusion=props.normal_map_cage_extrusion,
+            cage_extrusion=props.cage_extrusion_mm / 1000.0,
         )
     except RuntimeError:
         tree.nodes.remove(tex_node)
