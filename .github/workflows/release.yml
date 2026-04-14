@@ -46,8 +46,27 @@ jobs:
       - name: Build
         run: python build.py
 
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          # Extract the section for this version (between its ## header and the next ## header)
+          BODY=$(python -c "
+          import re, sys
+          text = open('CHANGELOG.md').read()
+          pattern = r'## \[' + re.escape('$TAG_VERSION') + r'\].*?\n(.*?)(?=\n## |\Z)'
+          m = re.search(pattern, text, re.DOTALL)
+          if m:
+              print(m.group(1).strip())
+          else:
+              print('No changelog entry found for version $TAG_VERSION')
+              sys.exit(1)
+          ")
+          # Write to file to preserve newlines
+          echo "$BODY" > release_body.md
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: release_body.md
           files: build/model-optimizer-addon.py

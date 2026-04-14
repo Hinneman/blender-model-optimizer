@@ -416,6 +416,7 @@ def bake_normal_map_for_decimate(context, obj, highpoly, props):
 
     # --- bake selection -------------------------------------------------
     bpy.ops.object.select_all(action="DESELECT")
+    highpoly.hide_set(False)
     highpoly.select_set(True)
     obj.select_set(True)
     context.view_layer.objects.active = obj
@@ -430,7 +431,8 @@ def bake_normal_map_for_decimate(context, obj, highpoly, props):
             use_selected_to_active=True,
             cage_extrusion=props.cage_extrusion_mm / 1000.0,
         )
-    except RuntimeError:
+    except RuntimeError as exc:
+        print(f"  [AI Optimizer] Normal map bake failed for '{obj.name}': {exc}")
         tree.nodes.remove(tex_node)
         bpy.data.images.remove(img)
         context.scene.render.engine = original_engine
@@ -476,3 +478,12 @@ def decimate_single(context, obj, props):
     mod.ratio = props.decimate_ratio
     mod.use_collapse_triangulate = True
     bpy.ops.object.modifier_apply(modifier=mod.name)
+
+    # Post-decimate cleanup: fix degenerate geometry without adding new faces
+    # (hole-filling creates faces with bad UVs that cause texture artifacts)
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.remove_doubles(threshold=props.merge_distance_mm / 1000.0)
+    bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.mesh.delete_loose(use_verts=True, use_edges=True, use_faces=False)
+    bpy.ops.object.mode_set(mode="OBJECT")

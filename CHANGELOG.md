@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.1] - 2026-04-14
+
+### Fixed
+
+- **Normal map baking** — Baking silently failed because highpoly copies were hidden, preventing Blender from selecting them. The bake now works correctly.
+- **Post-decimate cleanup** — Decimation could leave degenerate geometry (duplicate vertices, flipped normals, loose edges). A cleanup pass now runs automatically after the collapse modifier is applied.
+- **Bake error reporting** — Normal map bake failures now log the actual error message to the system console instead of failing silently.
+
 ## [1.6.0] - 2026-04-13
 
 ### Added
