@@ -2,3 +2,4 @@ build/
 __pycache__/
 settings.local.json
 .worktrees/
+docs/plans/
