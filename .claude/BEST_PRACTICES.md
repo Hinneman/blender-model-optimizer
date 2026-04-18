@@ -54,3 +54,4 @@ ruff format src/         # format
 - Don't use `bpy.context` in module scope — it's not reliable during registration. Pass context from operators.
 - Don't hardcode paths — use `bpy.utils.user_resource()` or `bpy.data.filepath`.
 - Don't modify `bpy.data` outside of operators — changes won't be undoable.
+- Avoid bpy.ops.object.join() on large sets: It is notoriously slow. If joining many AI parts, recommend using bmesh.insert_mesh or a lower-level data-block transfer.

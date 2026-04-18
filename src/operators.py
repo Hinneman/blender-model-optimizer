@@ -10,6 +10,7 @@ from .geometry import (
     decimate_single,
     detect_and_apply_symmetry,
     fix_geometry_single,
+    floor_snap_all,
     remove_interior_single,
     remove_small_pieces_single,
 )
@@ -277,6 +278,8 @@ class AIOPT_OT_run_all(Operator):
     _interior_removed: int
     _small_pieces_deleted: int
     _small_pieces_faces_removed: int
+    _floor_snap_meshes: list
+    _floor_snap_shift: float
 
     @classmethod
     def poll(cls, context):
@@ -332,6 +335,15 @@ class AIOPT_OT_run_all(Operator):
             )
         if props.run_decimate:
             self._steps.append(("Decimate", self._setup_decimate, self._tick_decimate, self._teardown_decimate))
+        if props.run_floor_snap:
+            self._steps.append(
+                (
+                    "Floor Snap",
+                    self._setup_floor_snap,
+                    self._tick_floor_snap,
+                    self._teardown_floor_snap,
+                )
+            )
         if props.run_clean_images:
             self._steps.append(
                 (
@@ -724,6 +736,25 @@ class AIOPT_OT_run_all(Operator):
         removed = self._symmetry_faces_before - faces_after
         return f"Mirrored {self._symmetry_applied} object(s), {removed:,} faces removed"
 
+    # -- Floor Snap --
+
+    def _setup_floor_snap(self, context):
+        if context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+        self._floor_snap_meshes = get_selected_meshes()
+        self._floor_snap_shift = 0.0
+        # Single tick — operates on the group, not per-object.
+        return 1 if self._floor_snap_meshes else 0
+
+    def _tick_floor_snap(self, context, index):
+        self._floor_snap_shift = floor_snap_all(self._floor_snap_meshes, token=self._token)
+        return f"Shifted {self._floor_snap_shift * 1000:.1f} mm"
+
+    def _teardown_floor_snap(self, context):
+        if self._floor_snap_shift == 0.0:
+            return "Floor snap: no shift needed"
+        return f"Floor snap: shifted {self._floor_snap_shift * 1000:.1f} mm up"
+
     # -- Decimate --
 
     def _setup_decimate(self, context):
@@ -1047,6 +1078,29 @@ class AIOPT_OT_remove_small_pieces(Operator):
             total_faces += faces
 
         self.report({"INFO"}, f"Removed {total_parts:,} small piece(s), {total_faces:,} faces")
+        return {"FINISHED"}
+
+
+class AIOPT_OT_floor_snap(Operator):
+    bl_idname = "ai_optimizer.floor_snap"
+    bl_label = "Floor Snap"
+    bl_description = "Translate selected meshes so the lowest vertex sits at Z=0. XY position is unchanged"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        meshes = get_selected_meshes()
+        if not meshes:
+            self.report({"ERROR"}, "No mesh objects found")
+            return {"CANCELLED"}
+
+        if context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
+
+        shift = floor_snap_all(meshes)
+        if shift == 0.0:
+            self.report({"INFO"}, "Floor snap: no shift needed")
+        else:
+            self.report({"INFO"}, f"Floor snap: shifted {shift * 1000:.1f} mm up")
         return {"FINISHED"}
 
 

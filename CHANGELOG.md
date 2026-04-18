@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.0] - 2026-04-18
+
+### Added
+
+- `Auto Cage Distance` option for the normal-map bake: ray distance is automatically set to 1% of the mesh bounding-box max dimension. Works correctly regardless of model scale. Disable to fall back to the manual `Cage Extrusion (mm)` field.
+- `Fix Geometry` now includes a degenerate-dissolve pre-pass (threshold 1e-6) that removes zero-area faces and zero-length edges common in AI-generated meshes before the existing merge-by-distance step.
+- New pipeline step `Floor Snap`: translates the selected meshes so the lowest world-space vertex sits at Z=0, leaving XY unchanged. Useful for AI exports that arrive centered on origin. Runs between Decimate and Clean Images. Available as a standalone operator (`ai_optimizer.floor_snap`) and as a toggleable pipeline step, default ON.
+
+### Changed
+
+- Dependency status ("3D Print Toolbox installed / not installed") is now always visible at the top of the panel, not only when a mesh is selected.
+- Decimate step now protects UV seams by marking island boundaries as Sharp before the DECIMATE modifier runs. Prevents texture smearing on AI meshes whose UV layout would otherwise be destroyed by edge collapse. Meshes without UVs are unaffected.
+
+### Fixed
+
+- Removed a leftover `progress_update(0)` call in `log()` that was a silent no-op (no matching `progress_begin`).
+- Symmetry Mirror step now snaps the object origin onto the detected symmetry plane before applying the Mirror modifier. Prevents gaps or overlaps at the seam when the source AI mesh's origin is not already on the symmetry axis.
+
 ## [1.6.2] - 2026-04-18
 
 ### Changed
