@@ -30,6 +30,13 @@ class AIOPT_PT_main_panel(Panel):
         if state.is_running or state.step_results != "[]":
             return
 
+        # Dependency status — always visible
+        dep_row = layout.row()
+        if is_print3d_available():
+            dep_row.label(text="3D Print Toolbox available", icon="CHECKMARK")
+        else:
+            dep_row.label(text="3D Print Toolbox not installed — fallback active", icon="ERROR")
+
         # --- Stats ---
         meshes = get_selected_meshes()
         if meshes:
@@ -56,11 +63,6 @@ class AIOPT_PT_main_panel(Panel):
             else:
                 est_label = f"~{est_bytes / 1024:.0f} KB"
             col.label(text=f"Est. Export Size: {est_label}")
-
-            if is_print3d_available():
-                col.label(text="3D Print Toolbox: installed", icon="CHECKMARK")
-            else:
-                col.label(text="3D Print Toolbox: not found", icon="ERROR")
 
             col.separator()
             col.operator("ai_optimizer.show_stats", icon="FILE_REFRESH")
@@ -446,7 +448,9 @@ class AIOPT_PT_decimate_panel(Panel):
         col.prop(props, "bake_normal_map")
         if props.bake_normal_map:
             col.prop(props, "normal_map_resolution", text="")
-            col.prop(props, "cage_extrusion_mm")
+            col.prop(props, "auto_cage_extrusion")
+            if not props.auto_cage_extrusion:
+                col.prop(props, "cage_extrusion_mm")
             box = layout.box()
             warn_col = box.column(align=True)
             warn_col.scale_y = 0.8
@@ -455,6 +459,37 @@ class AIOPT_PT_decimate_panel(Panel):
 
         layout.separator()
         layout.operator("ai_optimizer.decimate", icon="MOD_DECIM")
+
+
+class AIOPT_PT_floor_snap_panel(Panel):
+    bl_label = "Floor Snap"
+    bl_idname = "AIOPT_PT_floor_snap_panel"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "AI Optimizer"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    @classmethod
+    def poll(cls, context):
+        state = context.window_manager.ai_optimizer_pipeline
+        return not state.is_running and state.step_results == "[]"
+
+    def draw_header(self, context):
+        props = context.scene.ai_optimizer
+        self.layout.prop(props, "run_floor_snap", text="")
+
+    def draw(self, context):
+        layout = self.layout
+
+        box = layout.box()
+        help_col = box.column(align=True)
+        help_col.scale_y = 0.8
+        help_col.label(text="Translates the model so the", icon="INFO")
+        help_col.label(text="lowest vertex sits at Z=0.")
+        help_col.label(text="XY position is unchanged.")
+
+        layout.separator()
+        layout.operator("ai_optimizer.floor_snap", icon="TRIA_DOWN_BAR")
 
 
 class AIOPT_PT_textures_panel(Panel):

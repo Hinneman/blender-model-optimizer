@@ -19,7 +19,13 @@ def fix_geometry_single(context, obj, props):
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
 
+    # Pre-pass: collapse zero-area faces and zero-length edges that AI meshes
+    # commonly contain. Threshold is intentionally very small — only truly
+    # degenerate geometry is affected.
+    bpy.ops.mesh.dissolve_degenerate(threshold=1e-6)
+
     # Merge close vertices
+    bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.mesh.remove_doubles(threshold=props.merge_distance_mm / 1000.0)
 
     # Recalculate normals
@@ -373,6 +379,27 @@ def detect_and_apply_symmetry(context, obj, axis="X", threshold=0.001, min_score
     bm.free()
     obj.data.update()
 
+    # Snap object origin to the symmetry plane so the mirror modifier pivots
+    # exactly on the plane. Without this, meshes whose origin is off-plane
+    # produce a gap or overlap at the seam when mirrored.
+    #
+    # We translate obj.location along the symmetry axis to match `center`
+    # (in local space, since `center` was computed from local vert coords),
+    # then counter-translate the mesh data so the world-space shape is
+    # unchanged.
+    axis_vec = Vector((0.0, 0.0, 0.0))
+    axis_vec[axis_index] = center
+    world_offset = obj.matrix_world.to_3x3() @ axis_vec
+    obj.location = obj.location + world_offset
+    # Counter-translate mesh verts by -center on the axis
+    bm_origin = bmesh.new()
+    bm_origin.from_mesh(obj.data)
+    for v in bm_origin.verts:
+        v.co[axis_index] -= center
+    bm_origin.to_mesh(obj.data)
+    bm_origin.free()
+    obj.data.update()
+
     # Add and apply Mirror modifier
     mod = obj.modifiers.new(name="Symmetry_Mirror", type="MIRROR")
     mod.use_axis[0] = axis_index == 0
@@ -383,6 +410,21 @@ def detect_and_apply_symmetry(context, obj, axis="X", threshold=0.001, min_score
     bpy.ops.object.modifier_apply(modifier=mod.name)
 
     return (True, score)
+
+
+def _compute_cage_extrusion(obj, props):
+    """Return cage extrusion distance in meters.
+
+    When ``props.auto_cage_extrusion`` is True, returns 1% of the object's
+    bounding-box max dimension. Otherwise returns the user-configured
+    ``cage_extrusion_mm`` converted to meters.
+    """
+    if props.auto_cage_extrusion:
+        max_dim = max(obj.dimensions.x, obj.dimensions.y, obj.dimensions.z)
+        if max_dim <= 0:
+            return props.cage_extrusion_mm / 1000.0
+        return max_dim * 0.01
+    return props.cage_extrusion_mm / 1000.0
 
 
 def bake_normal_map_for_decimate(context, obj, highpoly, props):
@@ -439,7 +481,7 @@ def bake_normal_map_for_decimate(context, obj, highpoly, props):
         bpy.ops.object.bake(
             type="NORMAL",
             use_selected_to_active=True,
-            cage_extrusion=props.cage_extrusion_mm / 1000.0,
+            cage_extrusion=_compute_cage_extrusion(obj, props),
         )
     except RuntimeError as exc:
         print(f"  [AI Optimizer] Normal map bake failed for '{obj.name}': {exc}")
@@ -470,6 +512,42 @@ def bake_normal_map_for_decimate(context, obj, highpoly, props):
     return img
 
 
+def _protect_uv_seams(obj):
+    """Mark UV-island boundaries as Sharp so DECIMATE preserves the UV layout.
+
+    No-op when the mesh has no UV map. Auto-generates seams from islands when
+    the mesh has UVs but no explicit seams. Called before the DECIMATE
+    modifier is applied — the modifier respects Sharp edges as collapse
+    boundaries, which prevents texture smearing across UV seams.
+    """
+    import bmesh
+
+    if not obj.data.uv_layers:
+        return
+
+    # Auto-mark seams from islands if none exist yet
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    has_seams = any(e.seam for e in bm.edges)
+    bm.free()
+
+    if not has_seams:
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.seams_from_islands()
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+    # Mark all seam edges as Sharp
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    for edge in bm.edges:
+        if edge.seam:
+            edge.smooth = False  # smooth=False means "sharp"
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
 def decimate_single(context, obj, props):
     """Dissolve coplanar faces, then collapse-decimate *obj*."""
     bpy.ops.object.select_all(action="DESELECT")
@@ -482,6 +560,10 @@ def decimate_single(context, obj, props):
         bpy.ops.mesh.select_all(action="SELECT")
         bpy.ops.mesh.dissolve_limited(angle_limit=props.dissolve_angle, delimit={"UV"})
         bpy.ops.object.mode_set(mode="OBJECT")
+
+    # Protect UV seams: mark island boundaries Sharp so DECIMATE doesn't
+    # collapse edges that define the texture layout.
+    _protect_uv_seams(obj)
 
     mod = obj.modifiers.new(name="Decimate_Optimize", type="DECIMATE")
     mod.decimate_type = "COLLAPSE"
@@ -497,3 +579,39 @@ def decimate_single(context, obj, props):
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.mesh.delete_loose(use_verts=True, use_edges=True, use_faces=False)
     bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def floor_snap_all(meshes, token=None):
+    """Translate all meshes so the group's lowest world-space vertex sits at Z=0.
+
+    Computes the minimum world-Z across every vertex of every mesh, then
+    shifts each mesh's ``obj.location.z`` up by that amount. XY is not
+    touched. Preserves relative heights between objects.
+
+    Returns the shift amount (in meters). Returns 0.0 when there are no
+    meshes or no vertices.
+    """
+    if not meshes:
+        return 0.0
+
+    min_z = float("inf")
+    for obj in meshes:
+        if token is not None:
+            token.check()
+        mw = obj.matrix_world
+        for v in obj.data.vertices:
+            world_z = (mw @ v.co).z
+            if world_z < min_z:
+                min_z = world_z
+
+    if min_z == float("inf"):
+        return 0.0
+
+    shift = -min_z
+    if abs(shift) < 1e-9:
+        return 0.0
+
+    for obj in meshes:
+        obj.location.z += shift
+
+    return shift

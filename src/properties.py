@@ -18,6 +18,11 @@ class AIOPT_Properties(PropertyGroup):
         name="Fix Geometry", default=True, description="Fix non-manifold geometry, merge vertices, recalculate normals"
     )
     run_decimate: BoolProperty(name="Decimate", default=True, description="Reduce polygon count", update=_tag_3d_redraw)
+    run_floor_snap: BoolProperty(
+        name="Floor Snap",
+        default=True,
+        description="Translate the model so its lowest point sits at Z=0 (world floor). XY position is unchanged",
+    )
     run_clean_images: BoolProperty(name="Clean Images", default=True, description="Remove duplicate images")
     run_clean_unused: BoolProperty(name="Clean Unused", default=True, description="Remove unused data blocks")
     run_resize_textures: BoolProperty(
@@ -162,6 +167,14 @@ class AIOPT_Properties(PropertyGroup):
         ],
         default="1024",
         description="Resolution of the baked normal map",
+    )
+    auto_cage_extrusion: BoolProperty(
+        name="Auto Cage Distance",
+        default=True,
+        description=(
+            "Automatically size the bake ray distance as 1% of the mesh bounding-box diagonal. "
+            "Disable to set the distance manually"
+        ),
     )
     cage_extrusion_mm: FloatProperty(
         name="Cage Extrusion (mm)",

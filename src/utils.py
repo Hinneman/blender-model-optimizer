@@ -62,10 +62,8 @@ def count_faces(meshes):
 
 
 def log(context, message, level="INFO"):
-    """Log a message to console and status bar."""
+    """Log a message to console."""
     print(f"  [AI Optimizer] {message}")
-    if hasattr(context, "window_manager"):
-        context.window_manager.progress_update(0)
 
 
 def get_config_path():
@@ -171,6 +169,7 @@ def estimate_glb_size(meshes, props):
 SAVEABLE_PROPS = [
     "run_fix_geometry",
     "run_decimate",
+    "run_floor_snap",
     "run_clean_images",
     "run_clean_unused",
     "run_resize_textures",
@@ -188,6 +187,7 @@ SAVEABLE_PROPS = [
     "decimate_ratio",
     "bake_normal_map",
     "normal_map_resolution",
+    "auto_cage_extrusion",
     "cage_extrusion_mm",
     "max_texture_size",
     "resize_mode",
