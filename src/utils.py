@@ -75,8 +75,15 @@ def get_config_path():
 
 def is_print3d_available():
     """Check if the 3D Print Toolbox add-on is installed and enabled."""
-    # Check for the operator that our fix_geometry step uses
-    return hasattr(bpy.ops.mesh, "print3d_clean_non_manifold")
+    # hasattr(bpy.ops.mesh, ...) is unreliable: bpy.ops uses dynamic attribute
+    # lookup and returns a wrapper for any name, so it always reports True.
+    # The operator only raises RuntimeError at call time if the add-on is
+    # disabled. Ask addon_utils directly instead, covering both the legacy
+    # bundled module name and the 4.2+ Extensions repo path.
+    import addon_utils
+
+    candidates = ("object_print3d_utils", "bl_ext.blender_org.print3d_toolbox")
+    return any(addon_utils.check(name)[1] for name in candidates)
 
 
 def _tag_3d_redraw(self, context):

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.7.1] - 2026-04-18
+
+### Fixed
+
+- 3D Print Toolbox availability is now detected via `addon_utils.check()` instead of `hasattr(bpy.ops.mesh, ...)`. The previous check always returned True because `bpy.ops` uses dynamic attribute lookup, so the sidebar could show "available" while the fix-geometry step silently fell back to manual hole-filling.
+- **Remove Interior (Ray Cast) no longer tears the exterior shell.** The raycast sampler now covers a wider ~55° cone with 13 rays instead of a narrow ~6° cone with 5 rays. Exterior faces in concave regions (fuselage spine, canopy fairing on AI aircraft meshes) previously had all 5 narrow-cone rays land on the opposite interior wall and got deleted as false positives. The wider cone lets at least one ray escape to open space, correctly classifying such faces as exterior.
+
 ## [1.7.0] - 2026-04-18
 
 ### Added

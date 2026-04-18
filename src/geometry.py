@@ -182,13 +182,34 @@ def _remove_interior_raycast(context, obj, token=None):
 
     # Small offset to avoid self-intersection
     OFFSET = 0.001
-    # Jitter directions around the normal
+    # Sample 13 outward directions across a ~55° cone around the face normal.
+    # Each offset is added to the unit normal and re-normalized before casting.
+    # Using a wider cone (vs. the previous ~6° cluster) lets exterior faces in
+    # concave regions have at least one ray exit to open space, which breaks
+    # the "all blocked" rule and prevents them from being flagged as interior.
+    #
+    # Layout:
+    #   - 1 ray along pure normal           (0° from normal)
+    #   - 6 rays at ~30° from normal        (inner ring, r = tan(30°) ≈ 0.577)
+    #   - 6 rays at ~55° from normal        (outer ring, r = tan(55°) ≈ 1.428),
+    #     rotated 30° from the inner ring so the two rings don't line up.
     jitter_offsets = [
-        Vector((0, 0, 0)),
-        Vector((0.1, 0.1, 0)),
-        Vector((-0.1, 0.1, 0)),
-        Vector((0.1, -0.1, 0)),
-        Vector((-0.1, -0.1, 0)),
+        # Pure normal
+        Vector((0.0, 0.0, 0.0)),
+        # Inner ring at ~30°, 6 rays spaced 60° apart
+        Vector((0.577, 0.0, 0.0)),
+        Vector((0.289, 0.500, 0.0)),
+        Vector((-0.289, 0.500, 0.0)),
+        Vector((-0.577, 0.0, 0.0)),
+        Vector((-0.289, -0.500, 0.0)),
+        Vector((0.289, -0.500, 0.0)),
+        # Outer ring at ~55°, 6 rays rotated 30° from the inner ring
+        Vector((1.237, 0.714, 0.0)),
+        Vector((0.0, 1.428, 0.0)),
+        Vector((-1.237, 0.714, 0.0)),
+        Vector((-1.237, -0.714, 0.0)),
+        Vector((0.0, -1.428, 0.0)),
+        Vector((1.237, -0.714, 0.0)),
     ]
 
     interior_faces = []
