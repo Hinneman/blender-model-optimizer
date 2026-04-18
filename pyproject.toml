@@ -1,6 +1,6 @@
 [project]
 name = "blender-model-optimizer"
-version = "1.6.1"
+version = "1.6.2"
 description = "Blender add-on to optimize AI-generated 3D models"
 requires-python = ">=3.10"
 
@@ -25,6 +25,7 @@ ignore = [
     "N801",   # class name should use CapWords — Blender enforces ADDON_OT_/PT_ prefixes
     "N802",   # function name should be lowercase — Blender API callbacks (draw, execute, etc.)
     "N806",   # variable in function should be lowercase — Blender constants
+    "N818",   # exception name should use Error suffix — PipelineCancelled is intentional naming
     "RUF012", # mutable class attrs — Blender requires set literals for bl_options on classes
     "SIM105", # contextlib.suppress — try/except/pass is clearer for Blender property loading
 ]

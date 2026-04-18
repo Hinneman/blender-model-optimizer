@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.2] - 2026-04-18
+
+### Changed
+
+- **Pipeline cancellation is now responsive mid-step** — Clicking Cancel (or pressing ESC) during a running pipeline now takes effect inside long Python loops (interior ray-cast, symmetry detection, small-pieces, image comparison), not only between steps. A hint under the Cancel button explains that an in-flight Blender op (decimate apply, export, bake) will still finish first.
+
+### Fixed
+
+- **EEVEE crash on weak iGPUs during pipeline** — Viewport shading is now temporarily switched from `RENDERED`/`MATERIAL` to `SOLID` for the duration of the pipeline and restored afterwards. EEVEE's constant material re-sync against mutating meshes could dereference freed image/material pointers on Intel integrated graphics and crash Blender mid-decimate.
+- **Depsgraph crash on cancel rollback** — The undo loop that rolls back pipeline changes is now deferred to a one-shot app timer instead of running inside the modal callback. Calling `bpy.ops.ed.undo()` while the modal operator was still on Blender's call stack caused `DepsgraphNodeBuilder::build_materials` to null-deref.
+- **Cancel rollback no longer walks into pre-pipeline work** — Cancel now snapshots the operator-stack length at pipeline start and undoes only back to that baseline, instead of a fixed step count that could step past our snapshot into the user's prior edits.
+
 ## [1.6.1] - 2026-04-14
 
 ### Fixed

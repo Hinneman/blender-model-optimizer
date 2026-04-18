@@ -43,3 +43,9 @@ Blender add-on ("AI 3D Model Optimizer") that optimizes AI-generated 3D models f
 - **Linting**: `ruff check src/` — config in `pyproject.toml`
 - **Formatting**: `ruff format src/`
 - See [BEST_PRACTICES.md](BEST_PRACTICES.md) for coding conventions and guidelines
+
+## Working with Claude
+
+- **Never commit.** The user commits all changes themselves. Claude (and any dispatched subagents) must stage/edit files but never run `git commit`.
+- **No worktrees.** Work directly in the main checkout on a feature branch. Do not create git worktrees.
+- **Update `CHANGELOG.md` when a feature is complete.** Before reporting a feature as done, add an entry under a new version heading matching the version in `pyproject.toml` (format: `## [X.Y.Z] - YYYY-MM-DD`), using Keep a Changelog sections (`### Added` / `### Changed` / `### Fixed` / `### Removed`). If `pyproject.toml` still holds the last released version, bump the patch or minor number as appropriate and update both files in the same change. Bug fixes alone don't need a version bump if one is already pending.

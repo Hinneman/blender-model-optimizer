@@ -178,6 +178,11 @@ class AIOPT_PT_progress_panel(Panel):
 
         # Cancel button
         layout.operator("ai_optimizer.cancel_pipeline", icon="CANCEL")
+        hint = layout.column(align=True)
+        hint.scale_y = 0.8
+        hint.label(text="Cancel takes effect at the next checkpoint.")
+        hint.label(text="An in-flight Blender op (decimate, export,")
+        hint.label(text="bake) will finish first.")
 
     def _draw_completed(self, layout, state, results):
         # Summary box

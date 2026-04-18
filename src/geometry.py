@@ -90,7 +90,7 @@ def _bbox_contains(outer_obj, inner_obj):
     return True
 
 
-def _remove_interior_loose_parts(context, obj):
+def _remove_interior_loose_parts(context, obj, token=None):
     """Remove disconnected mesh parts that are fully enclosed inside other parts.
 
     Separates mesh into loose parts, checks bounding-box containment,
@@ -123,6 +123,8 @@ def _remove_interior_loose_parts(context, obj):
 
     to_delete = []
     for inner in parts:
+        if token is not None:
+            token.check()
         for outer in parts:
             if inner == outer:
                 continue
@@ -153,7 +155,7 @@ def _remove_interior_loose_parts(context, obj):
     return faces_before - faces_after
 
 
-def _remove_interior_raycast(context, obj):
+def _remove_interior_raycast(context, obj, token=None):
     """Remove interior faces by casting rays outward from each face center.
 
     For each face, casts rays along the face normal (and jittered directions).
@@ -185,6 +187,8 @@ def _remove_interior_raycast(context, obj):
 
     interior_faces = []
     for face in bm.faces:
+        if token is not None:
+            token.check()
         center = obj.matrix_world @ face.calc_center_median()
         normal = (obj.matrix_world.to_3x3() @ face.normal).normalized()
 
@@ -220,16 +224,16 @@ def _remove_interior_raycast(context, obj):
     return faces_before - faces_after
 
 
-def remove_interior_single(context, obj, props):
+def remove_interior_single(context, obj, props, token=None):
     """Remove interior faces from *obj* using the configured method.
     Returns the number of faces removed.
     """
     if props.interior_method == "RAY_CAST":
-        return _remove_interior_raycast(context, obj)
-    return _remove_interior_loose_parts(context, obj)
+        return _remove_interior_raycast(context, obj, token=token)
+    return _remove_interior_loose_parts(context, obj, token=token)
 
 
-def remove_small_pieces_single(context, obj, props):
+def remove_small_pieces_single(context, obj, props, token=None):
     """Delete disconnected mesh islands below face count or volume threshold.
 
     A loose part is deleted if ``face_count < face_threshold`` OR
@@ -265,6 +269,8 @@ def remove_small_pieces_single(context, obj, props):
 
     to_delete = []
     for part in parts:
+        if token is not None:
+            token.check()
         face_count = len(part.data.polygons)
 
         bm = bmesh.new()
@@ -300,7 +306,7 @@ def remove_small_pieces_single(context, obj, props):
     return (len(to_delete), faces_before - faces_after)
 
 
-def detect_and_apply_symmetry(context, obj, axis="X", threshold=0.001, min_score=0.85):
+def detect_and_apply_symmetry(context, obj, axis="X", threshold=0.001, min_score=0.85, token=None):
     """Detect near-symmetric geometry and apply a mirror optimization.
 
     Checks whether *obj* is approximately symmetric along *axis* (one of
@@ -336,13 +342,17 @@ def detect_and_apply_symmetry(context, obj, axis="X", threshold=0.001, min_score
     # Build KDTree from all vertices
     kd = KDTree(len(bm.verts))
     for i, v in enumerate(bm.verts):
+        if token is not None and i % 1024 == 0:
+            token.check()
         kd.insert(v.co, i)
     kd.balance()
 
     # Check symmetry for vertices on the positive side
     positive_verts = [v for v in bm.verts if v.co[axis_index] >= center]
     matched = 0
-    for v in positive_verts:
+    for i, v in enumerate(positive_verts):
+        if token is not None and i % 1024 == 0:
+            token.check()
         mirrored = v.co.copy()
         mirrored[axis_index] = 2 * center - v.co[axis_index]
         _co, _idx, dist = kd.find(mirrored)

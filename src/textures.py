@@ -43,11 +43,12 @@ def get_image_fingerprint(img):
     return fp + tuple(sampled)
 
 
-def images_are_identical(img_a, img_b):
+def images_are_identical(img_a, img_b, token=None):
     """Full pixel comparison between two images.
 
     Only called when fingerprints match, so this is a rare slow path for
-    confirmation.
+    confirmation. When *token* is supplied, checks it once per chunk so
+    cancel takes effect within ~4k pixels.
     """
     if img_a.size[0] != img_b.size[0] or img_a.size[1] != img_b.size[1]:
         return False
@@ -60,9 +61,10 @@ def images_are_identical(img_a, img_b):
     if len(px_a) != len(px_b):
         return False
 
-    # Compare in chunks for efficiency
     chunk = 4096
     for start in range(0, len(px_a), chunk):
+        if token is not None:
+            token.check()
         end = min(start + chunk, len(px_a))
         for i in range(start, end):
             if abs(px_a[i] - px_b[i]) > 0.001:
@@ -70,7 +72,7 @@ def images_are_identical(img_a, img_b):
     return True
 
 
-def clean_images_all(context):
+def clean_images_all(context, token=None):
     """Remove truly identical images by comparing pixel content.
 
     Returns ``(removed_count, detail_string)``.
@@ -90,6 +92,8 @@ def clean_images_all(context):
     # Phase 1: Group images by fingerprint (fast)
     fingerprint_groups = {}
     for img in images:
+        if token is not None:
+            token.check()
         fp = get_image_fingerprint(img)
         if fp is None:
             continue
@@ -103,6 +107,8 @@ def clean_images_all(context):
         # Find clusters of truly identical images within this group
         merged = set()
         for i, img_a in enumerate(group):
+            if token is not None:
+                token.check()
             try:
                 if img_a.name in merged:
                     continue
@@ -116,7 +122,7 @@ def clean_images_all(context):
                 except ReferenceError:
                     continue
 
-                if images_are_identical(img_a, img_b):
+                if images_are_identical(img_a, img_b, token=token):
                     # Keep whichever has more material users, or img_a as tiebreaker
                     users_a = get_image_users(img_a)
                     users_b = get_image_users(img_b)
