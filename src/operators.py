@@ -21,6 +21,8 @@ from .textures import (
 )
 from .utils import (
     SAVEABLE_PROPS,
+    CancelToken,
+    PipelineCancelled,
     count_faces,
     export_glb_all,
     generate_lods,
@@ -265,6 +267,7 @@ class AIOPT_OT_run_all(Operator):
     bl_options = {"REGISTER"}
 
     _timer = None
+    _token: object  # CancelToken instance for the current run
     _steps: list  # list of (name, setup_fn, tick_fn, teardown_fn)
     _sub_items: list  # items for current step
     _redraw_pending: bool  # burn one extra tick so the UI can actually repaint
@@ -368,6 +371,32 @@ class AIOPT_OT_run_all(Operator):
         # Push undo snapshot so we can roll back on cancel
         bpy.ops.ed.undo_push(message="Before AI Optimizer Pipeline")
 
+        # Record how many Python-invoked operators Blender has tracked so far.
+        # Every bpy.ops.* call the pipeline makes appends one entry here, so on
+        # cancel we can stop undoing once the list length returns to this
+        # baseline — giving us "just enough" undos instead of walking past our
+        # snapshot into the user's prior work.
+        self._ops_baseline = len(context.window_manager.operators)
+
+        # Drop RENDERED/MATERIAL viewports to SOLID for the duration of the
+        # pipeline. EEVEE's constant material re-sync against mutating meshes
+        # can dereference freed image/material pointers on weak iGPUs and
+        # crash Blender (seen with Intel integrated graphics + heavy pipelines).
+        self._shading_restore = []
+        for area in context.screen.areas:
+            if area.type != "VIEW_3D":
+                continue
+            for space in area.spaces:
+                if space.type != "VIEW_3D":
+                    continue
+                if space.shading.type in {"RENDERED", "MATERIAL"}:
+                    self._shading_restore.append((space, space.shading.type))
+                    space.shading.type = "SOLID"
+
+        # Cooperative cancellation token — long Python loops in step
+        # functions poll this between iterations.
+        self._token = CancelToken()
+
         # Initialise runtime state
         self._sub_items = []
         self._start_time = time.monotonic()
@@ -410,6 +439,7 @@ class AIOPT_OT_run_all(Operator):
         state = context.window_manager.ai_optimizer_pipeline
 
         if event.type == "ESC" or state.was_cancelled:
+            self._token.cancelled = True
             self._cancel_pipeline(context)
             return {"CANCELLED"}
 
@@ -451,6 +481,9 @@ class AIOPT_OT_run_all(Operator):
             # Process one sub-item
             try:
                 tick(context, sub)
+            except PipelineCancelled:
+                self._cancel_pipeline(context)
+                return {"CANCELLED"}
             except Exception as e:
                 print(f"  [AI Optimizer] Error in step '{_name}': {e}")
                 self._cancel_pipeline(context)
@@ -503,6 +536,9 @@ class AIOPT_OT_run_all(Operator):
         state.current_step_name = ""
         context.window_manager.event_timer_remove(self._timer)
         self._timer = None
+        for space, shading_type in self._shading_restore:
+            space.shading.type = shading_type
+        self._shading_restore = []
         for area in context.screen.areas:
             if area.type == "VIEW_3D":
                 area.tag_redraw()
@@ -532,10 +568,43 @@ class AIOPT_OT_run_all(Operator):
         context.window_manager.event_timer_remove(self._timer)
         self._timer = None
 
-        # Undo all changes
-        bpy.ops.ed.undo()
+        # Calling bpy.ops.ed.undo() from *inside* the modal callback is racy:
+        # the modal operator is still on Blender's call stack while undo
+        # rewinds the depsgraph / material relations, which has crashed
+        # `DepsgraphNodeBuilder::build_materials` with a null deref on weak
+        # iGPUs. Defer the undo loop to a one-shot app timer so it runs
+        # after the modal returns {"CANCELLED"} and the operator is off
+        # the stack.
+        shading_restore = self._shading_restore
+        self._shading_restore = []
+        ops_baseline = getattr(self, "_ops_baseline", 0)
 
-        self.report({"WARNING"}, "Pipeline cancelled — all changes undone")
+        def _deferred_rollback():
+            # Undo until wm.operators returns to the length we saw at invoke,
+            # which means every pipeline-pushed entry has been rolled back.
+            # Bounded as a safety net so we never walk past our snapshot into
+            # user work that happened before the pipeline started.
+            max_steps = bpy.context.preferences.edit.undo_steps
+            safety_cap = min(max_steps, 128)
+            for _ in range(safety_cap):
+                if len(bpy.context.window_manager.operators) <= ops_baseline:
+                    break
+                try:
+                    result = bpy.ops.ed.undo()
+                except RuntimeError:
+                    break
+                if "CANCELLED" in result or "PASS_THROUGH" in result:
+                    break
+            for space, shading_type in shading_restore:
+                try:
+                    space.shading.type = shading_type
+                except (ReferenceError, AttributeError):
+                    pass
+            return None  # don't reschedule
+
+        bpy.app.timers.register(_deferred_rollback, first_interval=0.05)
+
+        self.report({"WARNING"}, "Pipeline cancelled — rolling back changes")
 
     # ----- setup / tick / teardown helpers -----
 
@@ -597,7 +666,7 @@ class AIOPT_OT_run_all(Operator):
     def _tick_remove_interior(self, context, index):
         props = context.scene.ai_optimizer
         obj = self._sub_items[index]
-        removed = remove_interior_single(context, obj, props)
+        removed = remove_interior_single(context, obj, props, token=self._token)
         self._interior_removed += removed
         return obj.name
 
@@ -617,7 +686,7 @@ class AIOPT_OT_run_all(Operator):
     def _tick_remove_small_pieces(self, context, index):
         props = context.scene.ai_optimizer
         obj = self._sub_items[index]
-        parts, faces = remove_small_pieces_single(context, obj, props)
+        parts, faces = remove_small_pieces_single(context, obj, props, token=self._token)
         self._small_pieces_deleted += parts
         self._small_pieces_faces_removed += faces
         return obj.name
@@ -639,7 +708,12 @@ class AIOPT_OT_run_all(Operator):
         props = context.scene.ai_optimizer
         obj = self._sub_items[index]
         applied, score = detect_and_apply_symmetry(
-            context, obj, props.symmetry_axis, props.symmetry_threshold_mm / 1000.0, props.symmetry_min_score
+            context,
+            obj,
+            props.symmetry_axis,
+            props.symmetry_threshold_mm / 1000.0,
+            props.symmetry_min_score,
+            token=self._token,
         )
         if applied:
             self._symmetry_applied += 1
@@ -705,7 +779,7 @@ class AIOPT_OT_run_all(Operator):
         return 1
 
     def _tick_clean_images(self, context, index):
-        _removed, detail = clean_images_all(context)
+        _removed, detail = clean_images_all(context, token=self._token)
         self._clean_detail = detail
         return detail
 

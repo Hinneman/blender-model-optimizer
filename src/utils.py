@@ -5,6 +5,38 @@ import os
 import bpy
 
 
+class PipelineCancelled(Exception):
+    """Raised by CancelToken.check() when the user has cancelled the pipeline.
+
+    The modal operator catches this at the tick boundary and routes to the
+    normal cancel path. Step functions should let it propagate — do not
+    catch it with a bare ``except Exception``.
+    """
+
+
+class CancelToken:
+    """Cooperative cancellation flag threaded through pipeline step functions.
+
+    The modal operator owns one token per run and sets ``cancelled`` to True
+    when the user clicks Cancel or presses ESC. Step functions call
+    ``check()`` at loop boundaries; when the flag is set it raises
+    ``PipelineCancelled`` which the modal catches.
+
+    Single-step operators (``AIOPT_OT_fix_geometry`` etc.) pass no token,
+    and step functions treat ``token=None`` as a no-op — they behave
+    exactly as before.
+    """
+
+    __slots__ = ("cancelled",)
+
+    def __init__(self):
+        self.cancelled = False
+
+    def check(self):
+        if self.cancelled:
+            raise PipelineCancelled()
+
+
 def get_image_users(image):
     """Count how many material node trees actually reference this image."""
     count = 0
