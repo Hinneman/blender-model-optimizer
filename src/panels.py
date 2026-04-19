@@ -433,6 +433,7 @@ class AIOPT_PT_decimate_panel(Panel):
         col = layout.column(align=True)
         col.prop(props, "dissolve_angle", slider=True)
         col.prop(props, "decimate_ratio", slider=True)
+        col.prop(props, "decimate_passes", slider=True)
 
         # Show preview of what this ratio means
         meshes = get_selected_meshes()
@@ -441,6 +442,14 @@ class AIOPT_PT_decimate_panel(Panel):
             estimated = int(current * props.decimate_ratio)
             col.label(text=f"Current: {current:,} faces")
             col.label(text=f"Estimated after: ~{estimated:,} faces")
+            if props.decimate_passes > 1:
+                per_pass = props.decimate_ratio ** (1.0 / props.decimate_passes)
+                col.label(text=f"Per-pass ratio: {per_pass:.3f} \u00d7 {props.decimate_passes}")
+
+        col = layout.column(align=True)
+        col.prop(props, "run_planar_postpass")
+        if props.run_planar_postpass:
+            col.prop(props, "planar_angle", slider=True)
 
         layout.separator()
         col = layout.column(align=True)

@@ -153,6 +153,43 @@ class AIOPT_Properties(PropertyGroup):
         subtype="FACTOR",
         update=_tag_3d_redraw,
     )
+    decimate_passes: IntProperty(
+        name="Passes",
+        default=1,
+        min=1,
+        max=5,
+        description=(
+            "Split decimation into N passes targeting the final ratio. "
+            "Per-pass ratio is ratio ** (1/passes). Higher pass counts preserve "
+            "detail better at low ratios but take proportionally longer"
+        ),
+        update=_tag_3d_redraw,
+    )
+    run_planar_postpass: BoolProperty(
+        name="Planar Post-Pass",
+        default=True,
+        description=(
+            "After collapse decimation, run a second planar-dissolve pass that merges "
+            "adjacent near-coplanar faces into n-gons. Dramatically reduces triangle count "
+            "in flat regions (tops of cylinders, panels, ground planes) without changing "
+            "curved surfaces. UV islands are preserved natively by the modifier. Disable "
+            "if your mesh has subtle curvature that should not be flattened"
+        ),
+    )
+    planar_angle: FloatProperty(
+        name="Planar Angle",
+        default=0.0872665,
+        min=0.0,
+        max=0.523599,
+        step=1,
+        precision=3,
+        description=(
+            "Max angle between adjacent faces for planar-dissolve to merge them. "
+            "5 deg (default) is conservative; 10-15 deg reduces more faces but may "
+            "flatten subtle curvature"
+        ),
+        subtype="ANGLE",
+    )
     bake_normal_map: BoolProperty(
         name="Bake Normal Map",
         default=True,

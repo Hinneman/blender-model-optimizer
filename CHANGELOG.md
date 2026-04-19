@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.8.0] - 2026-04-19
+
+### Added
+
+- `Passes` setting on the Decimate step (1–5, default 1). Splits decimation into N iterations targeting the same final ratio, with per-pass ratio computed as `ratio ** (1/passes)` — so 3 passes at final ratio 0.1 collapses at ~0.464 per pass and still lands at ~10% of the original face count. The dissolve pre-pass and seam split run once up front; only the COLLAPSE modifier runs per iteration, so the quadric solver recomputes its error field between passes. For the same final face count, higher pass counts preserve silhouette and texture detail noticeably better at aggressive ratios (e.g. 3 passes reaching 0.1 produces a much smoother result than a single pass at 0.1). Default of 1 keeps existing behavior unchanged.
+- `Planar Post-Pass` toggle on the Decimate step, **default on**, with a `Planar Angle` slider (default 5 deg). Runs a second DECIMATE modifier in `DISSOLVE` (planar) mode after the collapse pass, merging adjacent near-coplanar faces into n-gons. Dramatically reduces triangle count in flat regions — cylinder tops, flat panels, ground planes — without touching curved surfaces. UV island boundaries are preserved natively via the modifier's `delimit={'UV'}` setting. Fixes the radial fan artifact where the COLLAPSE solver left dozens of triangles meeting at a central vertex on flat discs. Disable if your mesh has subtle curvature that should not be flattened.
+- **Topological UV seam constraint in the Decimate step.** When the mesh has UV layers, edges on UV island boundaries are now physically split before decimation so the COLLAPSE solver cannot collapse across them, then re-welded with a scoped merge-by-distance after the collapse passes. Replaces the 1.7.0 soft-hint seam protection (Sharp edges), which the collapse solver could still violate at aggressive ratios, causing texture smearing where rims bled into lids and neighboring UV islands. Always on when UVs are present; no configuration. Tradeoff: on meshes with highly fragmented UVs the final face count may exceed the target ratio because boundary edges become uncollapsible — the `Planar Post-Pass` default partially compensates by flattening coplanar regions.
+
+### Changed
+
+- Decimate step now runs a planar post-pass by default (see above). On AI-generated meshes with large flat regions this produces noticeably lower final face counts and eliminates the radial fan artifact; on meshes with subtle curvature you may want to disable `Planar Post-Pass` to preserve it.
+
 ## [1.7.1] - 2026-04-18
 
 ### Fixed
