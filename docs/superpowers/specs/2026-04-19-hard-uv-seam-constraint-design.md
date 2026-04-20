@@ -1,7 +1,9 @@
 # Hard UV Seam Constraint for Decimate
 
-**Status:** Design approved, awaiting implementation plan
-**Target version:** 1.8.0 (unreleased)
+> **ABANDONED (2026-04-20).** This approach was implemented and reverted. On clean-UV meshes (e.g. barrels) it eliminated texture bleed as designed, but on AI-generated meshes with fragmented UVs (the add-on's primary target) the seam splits broke the mesh into hundreds of independent flaps whose boundaries drifted too far apart during aggressive decimation for the restitch pass to re-weld. The result was visible cracks, torn faces, and holes — worse than the bleed the change was trying to fix. Kept as a record of the attempt; do not implement.
+
+**Status:** Abandoned
+**Target version:** 1.8.0 (unreleased — was never shipped)
 **Date:** 2026-04-19
 
 ## Problem

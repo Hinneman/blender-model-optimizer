@@ -446,6 +446,9 @@ class AIOPT_PT_decimate_panel(Panel):
                 per_pass = props.decimate_ratio ** (1.0 / props.decimate_passes)
                 col.label(text=f"Per-pass ratio: {per_pass:.3f} \u00d7 {props.decimate_passes}")
 
+        layout.separator()
+        layout.prop(props, "protect_uv_seams")
+
         col = layout.column(align=True)
         col.prop(props, "run_planar_postpass")
         if props.run_planar_postpass:

@@ -165,6 +165,16 @@ class AIOPT_Properties(PropertyGroup):
         ),
         update=_tag_3d_redraw,
     )
+    protect_uv_seams: BoolProperty(
+        name="Protect UV Seams",
+        default=False,
+        description=(
+            "Mark UV island boundaries as Sharp edges before decimation so the collapse "
+            "solver won't collapse across them. Recommended for CAD-style meshes with "
+            "clean UV layouts (few, meaningful islands). Disable for AI-generated meshes "
+            "whose fragmented UVs create fan artifacts in flat regions"
+        ),
+    )
     run_planar_postpass: BoolProperty(
         name="Planar Post-Pass",
         default=True,

@@ -533,29 +533,20 @@ def bake_normal_map_for_decimate(context, obj, highpoly, props):
     return img
 
 
-def _split_uv_seams(obj):
-    """Split the mesh topologically along UV seams.
+def _protect_uv_seams(obj):
+    """Mark UV-island boundaries as Sharp so DECIMATE preserves the UV layout.
 
-    After calling this, vertices that sat on a UV island boundary are
-    duplicated into disconnected copies (one per incident island). Since
-    the DECIMATE modifier can only collapse shared edges, collapses across
-    seams become physically impossible.
-
-    Returns a list of quantized world-space positions (tuples of 3 floats,
-    rounded to QUANTIZATION_DP decimal places) for every vertex that was
-    incident to a seam edge before splitting. The caller uses these to
-    scope the post-decimate restitch pass.
-
-    No-op when the mesh has no UV map. Returns an empty list in that case
-    and in the case where no seams are detected.
+    No-op when the mesh has no UV map. Auto-generates seams from islands when
+    the mesh has UVs but no explicit seams. Called before the DECIMATE
+    modifier is applied — the modifier respects Sharp edges as collapse
+    boundaries, which prevents texture smearing across UV seams.
     """
     import bmesh
 
     if not obj.data.uv_layers:
-        return []
+        return
 
-    # Auto-mark seams from islands if none exist yet, so meshes with UVs
-    # but no explicit seams still get protection.
+    # Auto-mark seams from islands if none exist yet
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     has_seams = any(e.seam for e in bm.edges)
@@ -567,114 +558,15 @@ def _split_uv_seams(obj):
         bpy.ops.uv.seams_from_islands()
         bpy.ops.object.mode_set(mode="OBJECT")
 
-    # Record seam-vertex positions in object-local space. Quantize so the
-    # restitch pass can hash them without float-equality headaches. The
-    # mesh has not been modified yet, so these positions are stable.
-    seam_positions = []
+    # Mark all seam edges as Sharp
     bm = bmesh.new()
     bm.from_mesh(obj.data)
-    seam_verts = set()
     for edge in bm.edges:
         if edge.seam:
-            for v in edge.verts:
-                seam_verts.add(v)
-    for v in seam_verts:
-        co = v.co
-        seam_positions.append((round(co.x, 6), round(co.y, 6), round(co.z, 6)))
-    bm.free()
-
-    if not seam_positions:
-        return []
-
-    # Select seam edges and edge-split them. This duplicates shared verts
-    # into per-island copies. The quantized positions above still match
-    # both copies since they start at identical coordinates.
-    bpy.ops.object.mode_set(mode="EDIT")
-    bpy.ops.mesh.select_all(action="DESELECT")
-    bpy.ops.mesh.select_mode(type="EDGE")
-    bpy.ops.object.mode_set(mode="OBJECT")
-
-    for edge in obj.data.edges:
-        edge.select = edge.use_seam
-
-    bpy.ops.object.mode_set(mode="EDIT")
-    try:
-        bpy.ops.mesh.edge_split(type="EDGE")
-    except RuntimeError as exc:
-        # Degenerate meshes can make edge_split fail. Fall back to no-op
-        # behavior: decimate proceeds without seam protection.
-        print(f"  [AI Optimizer] edge_split failed, skipping seam protection: {exc}")
-        bpy.ops.object.mode_set(mode="OBJECT")
-        return []
-    bpy.ops.object.mode_set(mode="OBJECT")
-
-    return seam_positions
-
-
-def _restitch_seams(obj, seam_positions, threshold_m):
-    """Re-weld vertices that were split by _split_uv_seams.
-
-    Scoped merge-by-distance: only vertices whose current position is
-    within *threshold_m* of any recorded seam position are considered.
-    Unrelated nearby vertices (e.g. two originally-distinct surfaces that
-    happened to end up close after decimation) are not touched.
-
-    ``seam_positions`` is the list returned by _split_uv_seams (quantized
-    object-local coords). When empty, this function is a no-op.
-    """
-    import bmesh
-
-    if not seam_positions:
-        return
-
-    # Build a spatial hash of seam positions at cell size *threshold_m*.
-    # A vertex is a candidate for welding iff its own cell or any of the
-    # 26 neighbor cells contains a recorded seam position.
-    cell = max(threshold_m, 1e-9)
-
-    def key_for(co):
-        return (int(co[0] / cell), int(co[1] / cell), int(co[2] / cell))
-
-    seam_cells = set()
-    for pos in seam_positions:
-        seam_cells.add(key_for(pos))
-
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
-
-    candidates = []
-    for v in bm.verts:
-        k = key_for((v.co.x, v.co.y, v.co.z))
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                for dz in (-1, 0, 1):
-                    if (k[0] + dx, k[1] + dy, k[2] + dz) in seam_cells:
-                        candidates.append(v)
-                        break
-                else:
-                    continue
-                break
-            else:
-                continue
-            break
-
-    unwelded_before = len(candidates)
-    if candidates:
-        bmesh.ops.remove_doubles(bm, verts=candidates, dist=threshold_m)
-
+            edge.smooth = False  # smooth=False means "sharp"
     bm.to_mesh(obj.data)
     bm.free()
     obj.data.update()
-
-    # Log a warning if a sizable fraction of seam candidates failed to
-    # merge — usually means decimation drifted them apart by more than
-    # *threshold_m*. Does not abort; caller continues the pipeline.
-    if unwelded_before:
-        after_count = len(obj.data.vertices)
-        print(
-            f"  [AI Optimizer] Seam restitch: {unwelded_before} candidate vertices "
-            f"near seams, mesh now has {after_count} vertices total"
-        )
 
 
 def decimate_single(context, obj, props):
@@ -683,13 +575,10 @@ def decimate_single(context, obj, props):
     When ``props.decimate_passes > 1``, collapse decimation is split into N passes
     targeting ``props.decimate_ratio`` overall. Per-pass ratio is
     ``decimate_ratio ** (1/passes)`` so the cumulative ratio closely approximates
-    the final ratio. The dissolve pre-pass and seam split run once up front;
-    only the COLLAPSE modifier runs per iteration.
-
-    If the mesh has UV layers, edges on UV island boundaries are topologically
-    split before decimation so the collapse solver physically cannot collapse
-    across them. After the collapse passes the split vertex pairs are welded
-    back with a tight scoped merge-by-distance.
+    the final ratio. The dissolve pre-pass and UV seam protection run once
+    up front; only the COLLAPSE modifier runs per iteration, so the quadric
+    solver recomputes its error field between passes without re-constraining
+    already-protected seams.
 
     When ``props.run_planar_postpass`` is True, a planar (DISSOLVE) decimate
     modifier runs once after the collapse loop to merge near-coplanar faces
@@ -712,11 +601,13 @@ def decimate_single(context, obj, props):
         bpy.ops.mesh.dissolve_limited(angle_limit=props.dissolve_angle, delimit={"UV"})
         bpy.ops.object.mode_set(mode="OBJECT")
 
-    # Hard UV seam constraint: topologically split the mesh along UV island
-    # boundaries so the COLLAPSE modifier physically cannot collapse across
-    # them. Restitched after the collapse passes. No-op on meshes without UVs.
-    # See docs/superpowers/specs/2026-04-19-hard-uv-seam-constraint-design.md
-    seam_positions = _split_uv_seams(obj)
+    # Protect UV seams: mark island boundaries Sharp so DECIMATE doesn't
+    # collapse edges that define the texture layout. Run once — seam and
+    # sharp flags are preserved by subsequent collapses. Off by default:
+    # AI-generated meshes typically have fragmented UVs that create fan
+    # artifacts when seams are protected.
+    if getattr(props, "protect_uv_seams", False):
+        _protect_uv_seams(obj)
 
     for _ in range(passes):
         mod = obj.modifiers.new(name="Decimate_Optimize", type="DECIMATE")
@@ -724,16 +615,6 @@ def decimate_single(context, obj, props):
         mod.ratio = per_pass_ratio
         mod.use_collapse_triangulate = True
         bpy.ops.object.modifier_apply(modifier=mod.name)
-
-    # Restitch seams: re-weld the vertex pairs that _split_uv_seams duplicated.
-    # Scoped to recorded seam positions, so unrelated geometry is never
-    # touched — which means we can use the user's full merge distance
-    # without risk. Under aggressive decimation seam-pair vertices can drift
-    # millimeters apart as each half collapses toward different neighbors;
-    # a sub-millimeter tolerance leaves the mesh shredded into disconnected
-    # flaps.
-    restitch_threshold_m = props.merge_distance_mm / 1000.0
-    _restitch_seams(obj, seam_positions, restitch_threshold_m)
 
     # Optional planar post-pass: merge adjacent near-coplanar faces into
     # n-gons. Reduces triangle count in flat regions without touching curved

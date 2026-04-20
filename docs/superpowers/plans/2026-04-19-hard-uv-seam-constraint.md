@@ -1,5 +1,7 @@
 # Hard UV Seam Constraint Implementation Plan
 
+> **ABANDONED (2026-04-20).** This plan was executed and then reverted. The topological seam-split approach broke the mesh into disconnected flaps on fragmented-UV AI meshes — the restitch could not re-weld boundaries that drifted too far apart during collapse. See the design doc at [../specs/2026-04-19-hard-uv-seam-constraint-design.md](../specs/2026-04-19-hard-uv-seam-constraint-design.md) for the full post-mortem note. Kept as a record of the attempt; do not execute.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the soft-hint `Protect UV Seams` mechanism with a topological seam-split-and-restitch approach so the decimator physically cannot collapse across UV island boundaries, eliminating texture smearing after decimate.
