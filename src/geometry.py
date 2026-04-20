@@ -726,10 +726,13 @@ def decimate_single(context, obj, props):
         bpy.ops.object.modifier_apply(modifier=mod.name)
 
     # Restitch seams: re-weld the vertex pairs that _split_uv_seams duplicated.
-    # Tolerance must be tighter than the user's global merge distance so we
-    # don't accidentally weld unrelated geometry near former seams. 0.01 mm
-    # ceiling is well below any realistic mesh feature.
-    restitch_threshold_m = min(props.merge_distance_mm, 0.01) / 1000.0
+    # Scoped to recorded seam positions, so unrelated geometry is never
+    # touched — which means we can use the user's full merge distance
+    # without risk. Under aggressive decimation seam-pair vertices can drift
+    # millimeters apart as each half collapses toward different neighbors;
+    # a sub-millimeter tolerance leaves the mesh shredded into disconnected
+    # flaps.
+    restitch_threshold_m = props.merge_distance_mm / 1000.0
     _restitch_seams(obj, seam_positions, restitch_threshold_m)
 
     # Optional planar post-pass: merge adjacent near-coplanar faces into
