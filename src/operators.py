@@ -72,7 +72,7 @@ class AIOPT_OT_fix_geometry(Operator):
             _result, join_detail = join_meshes_by_material(context, meshes, props.join_mode)
 
         msg = f"Fixed geometry on {len(meshes)} object(s), {fixed} manifold fix(es)"
-        if props.fix_manifold:
+        if props.manifold_method != "OFF":
             msg += f" — method: {method_used}"
         if mat_merged:
             msg += f", {mat_merged} materials merged"

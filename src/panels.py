@@ -30,13 +30,6 @@ class AIOPT_PT_main_panel(Panel):
         if state.is_running or state.step_results != "[]":
             return
 
-        # Dependency status — always visible
-        dep_row = layout.row()
-        if is_print3d_available():
-            dep_row.label(text="3D Print Toolbox available", icon="CHECKMARK")
-        else:
-            dep_row.label(text="3D Print Toolbox not installed — fallback active", icon="ERROR")
-
         # --- Stats ---
         meshes = get_selected_meshes()
         if meshes:
@@ -262,23 +255,15 @@ class AIOPT_PT_geometry_panel(Panel):
         col = layout.column(align=True)
         col.prop(props, "merge_distance_mm")
         col.prop(props, "recalculate_normals")
-        col.prop(props, "fix_manifold")
 
-        if props.fix_manifold:
-            layout.separator()
-            if is_print3d_available():
-                row = layout.row()
-                row.label(text="3D Print Toolbox detected", icon="CHECKMARK")
-            else:
-                box = layout.box()
-                col = box.column(align=True)
-                col.label(text="3D Print Toolbox not found", icon="ERROR")
-                col.label(text="Using manual manifold fix (fill holes).")
-                col.label(text="Results may be less reliable.")
-                col.separator()
-                col.label(text="For better results, install it from:")
-                col.label(text="Edit → Preferences → Get Extensions")
-                col.label(text="and search '3D Print Toolbox'")
+        layout.separator()
+        layout.label(text="Manifold Fix:")
+        col = layout.column(align=True)
+        col.prop_enum(props, "manifold_method", "OFF")
+        col.prop_enum(props, "manifold_method", "FILL_HOLES")
+        row = col.row(align=True)
+        row.enabled = is_print3d_available()
+        row.prop_enum(props, "manifold_method", "PRINT3D")
 
         layout.separator()
         col = layout.column(align=True)
@@ -431,8 +416,8 @@ class AIOPT_PT_decimate_panel(Panel):
         props = context.scene.ai_optimizer
 
         col = layout.column(align=True)
-        col.prop(props, "dissolve_angle", slider=True)
         col.prop(props, "decimate_ratio", slider=True)
+        col.prop(props, "decimate_passes", slider=True)
 
         # Show preview of what this ratio means
         meshes = get_selected_meshes()
@@ -441,6 +426,17 @@ class AIOPT_PT_decimate_panel(Panel):
             estimated = int(current * props.decimate_ratio)
             col.label(text=f"Current: {current:,} faces")
             col.label(text=f"Estimated after: ~{estimated:,} faces")
+            if props.decimate_passes > 1:
+                per_pass = props.decimate_ratio ** (1.0 / props.decimate_passes)
+                col.label(text=f"Per-pass ratio: {per_pass:.3f} \u00d7 {props.decimate_passes}")
+
+        layout.separator()
+        layout.prop(props, "protect_uv_seams")
+
+        col = layout.column(align=True)
+        col.prop(props, "run_planar_prepass")
+        if props.run_planar_prepass:
+            col.prop(props, "planar_angle", slider=True)
 
         layout.separator()
         col = layout.column(align=True)
@@ -509,7 +505,7 @@ class AIOPT_PT_textures_panel(Panel):
         layout = self.layout
         props = context.scene.ai_optimizer
 
-        # Pipeline toggles for the three texture steps
+        # Pipeline toggles for the texture steps
         row = layout.row(align=True)
         row.prop(props, "run_clean_images", toggle=True, text="Clean Images")
         row.prop(props, "run_clean_unused", toggle=True, text="Clean Unused")

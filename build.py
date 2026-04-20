@@ -5,8 +5,10 @@ Usage:
     python build.py
 """
 
+import importlib.util
 import os
 import re
+import subprocess
 import sys
 
 # ---------------------------------------------------------------------------
@@ -263,6 +265,26 @@ def format_import_block(block):
 # ---------------------------------------------------------------------------
 
 
+def run_tests():
+    """Run the test suite if pytest is available. Aborts the build on failure.
+
+    pytest is a dev-only dep, not required for Blender runtime, so a missing
+    install is a warning (not an error) — CI always has pytest, and devs who
+    install it get early feedback locally.
+    """
+    tests_dir = os.path.join(PROJECT_ROOT, "tests")
+    if not os.path.isdir(tests_dir):
+        return
+    if importlib.util.find_spec("pytest") is None:
+        print("  [warn] pytest not installed — skipping tests. Install with: pip install pytest")
+        return
+    print("Running tests...", flush=True)
+    result = subprocess.run([sys.executable, "-m", "pytest", tests_dir, "-q"], cwd=PROJECT_ROOT)
+    if result.returncode != 0:
+        print("ERROR: tests failed — build aborted", file=sys.stderr)
+        sys.exit(1)
+
+
 def build():
     version_tuple = read_version()
     print(f"Building with version {version_tuple}")
@@ -338,4 +360,5 @@ def build():
 
 
 if __name__ == "__main__":
+    run_tests()
     build()

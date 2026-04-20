@@ -40,8 +40,21 @@ class AIOPT_Properties(PropertyGroup):
         description="Merge vertices closer than this distance in millimeters",
     )
     recalculate_normals: BoolProperty(name="Recalculate Normals", default=True, description="Fix flipped normals")
-    fix_manifold: BoolProperty(
-        name="Fix Manifold", default=True, description="Attempt to fix non-manifold (holes, open edges)"
+    manifold_method: EnumProperty(
+        name="Manifold Fix",
+        items=[
+            ("OFF", "Off", "Don't attempt manifold repair"),
+            ("FILL_HOLES", "Fill Holes", "Fill holes with n-gons (up to 32 sides). Safe on thin-shell meshes"),
+            (
+                "PRINT3D",
+                "3D Print Toolbox",
+                "Aggressive non-manifold cleanup. Best for watertight solid meshes. "
+                "Warning: deletes geometry around non-manifold edges \u2014 NOT suitable for "
+                "thin shells, draped covers, cloth, or any single-layer surface",
+            ),
+        ],
+        default="FILL_HOLES",
+        description="Method used to repair non-manifold geometry",
     )
 
     # -- Material & Mesh cleanup --
@@ -132,16 +145,6 @@ class AIOPT_Properties(PropertyGroup):
     )
 
     # -- Decimate settings --
-    dissolve_angle: FloatProperty(
-        name="Dissolve Angle",
-        default=0.2618,
-        min=0.0,
-        max=0.785398,
-        step=1,
-        precision=3,
-        description="Dissolve faces within this angle (radians). Cleans flat surfaces before decimation. 0 = skip",
-        subtype="ANGLE",
-    )
     decimate_ratio: FloatProperty(
         name="Ratio",
         default=0.1,
@@ -152,6 +155,54 @@ class AIOPT_Properties(PropertyGroup):
         description="Decimation ratio. 0.5 = keep 50% of faces after dissolve",
         subtype="FACTOR",
         update=_tag_3d_redraw,
+    )
+    decimate_passes: IntProperty(
+        name="Passes",
+        default=1,
+        min=1,
+        max=5,
+        description=(
+            "Split decimation into N passes targeting the final ratio. "
+            "Per-pass ratio is ratio ** (1/passes). Higher pass counts preserve "
+            "detail better at low ratios but take proportionally longer"
+        ),
+        update=_tag_3d_redraw,
+    )
+    protect_uv_seams: BoolProperty(
+        name="Protect UV Seams",
+        default=True,
+        description=(
+            "Mark UV island boundaries via a vertex-group weight bias so the "
+            "collapse solver is ~10x less likely to collapse across them. "
+            "Near-free; keep on for most meshes. Disable only if you see "
+            "over-tessellation clustering around seam vertices"
+        ),
+    )
+    run_planar_prepass: BoolProperty(
+        name="Planar Pre-Pass",
+        default=True,
+        description=(
+            "Before collapse decimation, run a planar-dissolve pass that merges "
+            "adjacent near-coplanar faces into n-gons. Dramatically reduces triangle count "
+            "in flat regions (tops of cylinders, panels, ground planes) without changing "
+            "curved surfaces, and frees COLLAPSE's budget for curved geometry. UV islands "
+            "are preserved natively by the modifier. Disable if your mesh has subtle "
+            "curvature that should not be flattened"
+        ),
+    )
+    planar_angle: FloatProperty(
+        name="Planar Angle",
+        default=0.0872665,
+        min=0.0,
+        max=0.523599,
+        step=1,
+        precision=3,
+        description=(
+            "Max angle between adjacent faces for planar-dissolve to merge them. "
+            "5 deg (default) is conservative; 10-15 deg reduces more faces but may "
+            "flatten subtle curvature"
+        ),
+        subtype="ANGLE",
     )
     bake_normal_map: BoolProperty(
         name="Bake Normal Map",
