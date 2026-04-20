@@ -28,15 +28,6 @@ class AIOPT_Properties(PropertyGroup):
     run_resize_textures: BoolProperty(
         name="Resize Textures", default=True, description="Resize textures to max size", update=_tag_3d_redraw
     )
-    run_uv_dilate: BoolProperty(
-        name="Dilate UV Gutters",
-        default=True,
-        description=(
-            "Bleed each UV island's edge colors outward into the surrounding texture gutter. "
-            "Prevents black smears on fragmented-UV meshes where post-decimate UV drift would "
-            "otherwise sample unpainted pixels between islands"
-        ),
-    )
     run_export: BoolProperty(name="Export GLB", default=True, description="Export optimized GLB")
 
     # -- Geometry settings --
@@ -49,8 +40,21 @@ class AIOPT_Properties(PropertyGroup):
         description="Merge vertices closer than this distance in millimeters",
     )
     recalculate_normals: BoolProperty(name="Recalculate Normals", default=True, description="Fix flipped normals")
-    fix_manifold: BoolProperty(
-        name="Fix Manifold", default=True, description="Attempt to fix non-manifold (holes, open edges)"
+    manifold_method: EnumProperty(
+        name="Manifold Fix",
+        items=[
+            ("OFF", "Off", "Don't attempt manifold repair"),
+            ("FILL_HOLES", "Fill Holes", "Fill holes with n-gons (up to 32 sides). Safe on thin-shell meshes"),
+            (
+                "PRINT3D",
+                "3D Print Toolbox",
+                "Aggressive non-manifold cleanup. Best for watertight solid meshes. "
+                "Warning: deletes geometry around non-manifold edges \u2014 NOT suitable for "
+                "thin shells, draped covers, cloth, or any single-layer surface",
+            ),
+        ],
+        default="FILL_HOLES",
+        description="Method used to repair non-manifold geometry",
     )
 
     # -- Material & Mesh cleanup --
@@ -141,16 +145,6 @@ class AIOPT_Properties(PropertyGroup):
     )
 
     # -- Decimate settings --
-    dissolve_angle: FloatProperty(
-        name="Dissolve Angle",
-        default=0.2618,
-        min=0.0,
-        max=0.785398,
-        step=1,
-        precision=3,
-        description="Dissolve faces within this angle (radians). Cleans flat surfaces before decimation. 0 = skip",
-        subtype="ANGLE",
-    )
     decimate_ratio: FloatProperty(
         name="Ratio",
         default=0.1,
@@ -176,23 +170,24 @@ class AIOPT_Properties(PropertyGroup):
     )
     protect_uv_seams: BoolProperty(
         name="Protect UV Seams",
-        default=False,
-        description=(
-            "Mark UV island boundaries as Sharp edges before decimation so the collapse "
-            "solver won't collapse across them. Recommended for CAD-style meshes with "
-            "clean UV layouts (few, meaningful islands). Disable for AI-generated meshes "
-            "whose fragmented UVs create fan artifacts in flat regions"
-        ),
-    )
-    run_planar_postpass: BoolProperty(
-        name="Planar Post-Pass",
         default=True,
         description=(
-            "After collapse decimation, run a second planar-dissolve pass that merges "
+            "Mark UV island boundaries via a vertex-group weight bias so the "
+            "collapse solver is ~10x less likely to collapse across them. "
+            "Near-free; keep on for most meshes. Disable only if you see "
+            "over-tessellation clustering around seam vertices"
+        ),
+    )
+    run_planar_prepass: BoolProperty(
+        name="Planar Pre-Pass",
+        default=True,
+        description=(
+            "Before collapse decimation, run a planar-dissolve pass that merges "
             "adjacent near-coplanar faces into n-gons. Dramatically reduces triangle count "
             "in flat regions (tops of cylinders, panels, ground planes) without changing "
-            "curved surfaces. UV islands are preserved natively by the modifier. Disable "
-            "if your mesh has subtle curvature that should not be flattened"
+            "curved surfaces, and frees COLLAPSE's budget for curved geometry. UV islands "
+            "are preserved natively by the modifier. Disable if your mesh has subtle "
+            "curvature that should not be flattened"
         ),
     )
     planar_angle: FloatProperty(
@@ -259,17 +254,6 @@ class AIOPT_Properties(PropertyGroup):
         default="DOWNSIZE",
         description="How to handle texture resizing",
         update=_tag_3d_redraw,
-    )
-    uv_dilate_pixels: IntProperty(
-        name="Dilate Pixels",
-        default=8,
-        min=1,
-        max=64,
-        description=(
-            "Number of pixels to bleed UV-island edge colors outward into the gutter. "
-            "Higher values cover larger UV drift at the cost of more processing time. "
-            "8 is a good default for most meshes; raise to 16+ if you still see black smears"
-        ),
     )
 
     # -- Export settings --

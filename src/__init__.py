@@ -48,7 +48,6 @@ from .operators import (
     AIOPT_OT_save_defaults,
     AIOPT_OT_show_stats,
     AIOPT_OT_symmetry_mirror,
-    AIOPT_OT_uv_dilate,
 )
 from .panels import (
     AIOPT_PT_decimate_panel,
@@ -79,7 +78,6 @@ classes = (
     AIOPT_OT_clean_images,
     AIOPT_OT_clean_unused,
     AIOPT_OT_resize_textures,
-    AIOPT_OT_uv_dilate,
     AIOPT_OT_export_glb,
     AIOPT_OT_run_all,
     AIOPT_OT_cancel_pipeline,

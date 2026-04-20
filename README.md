@@ -61,7 +61,7 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 |---|---|---|
 | Merge Distance | 0.1 mm | Threshold for merging close vertices |
 | Recalculate Normals | On | Fix flipped normals |
-| Fix Manifold | On | Attempt to fix non-manifold geometry (holes, open edges) |
+| Manifold Fix | Fill Holes | `Off` / `Fill Holes` (n-gon hole filling, safe on thin shells) / `3D Print Toolbox` (aggressive cleanup for watertight solids, requires the plugin — destroys thin-shell meshes) |
 | Merge Materials | On | Merge materials with identical shader setups |
 | Material Tolerance | 1% | Color/value tolerance when comparing material properties |
 | Join Meshes | On | Join mesh objects that share materials |
@@ -99,11 +99,15 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 
 | Setting | Default | Description |
 |---|---|---|
-| Dissolve Angle | 15° | Dissolve faces within this angle before decimation (0 = skip) |
-| Decimate Ratio | 0.1 | Keep 10% of faces after dissolve |
+| Decimate Ratio | 0.1 | Keep ~10% of the original face count |
+| Passes | 1 | Split COLLAPSE into N passes targeting the same final ratio. Higher values preserve silhouette and texture detail at aggressive ratios |
+| Protect UV Seams | On | Bias COLLAPSE ~5× against collapsing vertices near UV island boundaries. Prevents texture smearing on fragmented-UV meshes |
+| Planar Pre-Pass | On | Before COLLAPSE, merge near-coplanar faces into n-gons (UV-island-preserving). Frees COLLAPSE's budget for curved geometry |
+| Planar Angle | 5° | Max angle between adjacent faces for the planar pre-pass to merge them. 10–15° reduces more faces but may flatten subtle curvature |
 | Bake Normal Map | On | Bake high-poly detail into a normal map before decimating |
 | Normal Map Size | 1024 px | Resolution of the baked normal map |
-| Cage Extrusion | 10 mm | Ray distance for baking from high-poly to low-poly surface |
+| Auto Cage Distance | On | Set bake ray distance to 1% of the mesh bounding-box diagonal (scale-independent) |
+| Cage Extrusion | 10 mm | Manual bake ray distance (used when Auto Cage Distance is off) |
 
 ### Textures
 

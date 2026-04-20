@@ -41,7 +41,12 @@ jobs:
       - name: Lint
         run: |
           pip install ruff
-          ruff check src/
+          ruff check src/ tests/
+
+      - name: Test
+        run: |
+          pip install pytest
+          python -m pytest tests/
 
       - name: Build
         run: python build.py

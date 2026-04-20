@@ -2,6 +2,31 @@ import bpy
 from mathutils import Vector
 
 
+def _fill_holes_manifold():
+    """Select non-manifold geometry on the active mesh in Edit mode and fill holes up to 32 sides.
+
+    Caller must have already entered Edit mode on the target object. Returns
+    True on successful fill, False if Blender reports a RuntimeError (typically
+    when there's nothing to fill or the selection is invalid). Safe on thin-
+    shell meshes because it only adds n-gons to close open boundaries; it
+    never deletes geometry.
+    """
+    bpy.ops.mesh.select_all(action="DESELECT")
+    bpy.ops.mesh.select_non_manifold(
+        extend=False,
+        use_wire=True,
+        use_boundary=True,
+        use_multi_face=True,
+        use_non_contiguous=True,
+        use_verts=True,
+    )
+    try:
+        bpy.ops.mesh.fill_holes(sides=32)
+        return True
+    except RuntimeError:
+        return False
+
+
 def fix_geometry_single(context, obj, props):
     """Fix geometry on a single mesh object.
 
@@ -32,31 +57,25 @@ def fix_geometry_single(context, obj, props):
     if props.recalculate_normals:
         bpy.ops.mesh.normals_make_consistent(inside=False)
 
-    # Manifold fix
+    # Manifold fix — dispatch on the enum. PRINT3D is the aggressive option
+    # (deletes geometry around non-manifold edges); FILL_HOLES is safe on
+    # thin-shell meshes. OFF skips entirely.
     fixed = False
     method_used = "none"
-    if props.fix_manifold:
+    if props.manifold_method == "PRINT3D":
         try:
             bpy.ops.mesh.print3d_clean_non_manifold()
             fixed = True
             method_used = "3D Print Toolbox"
         except (AttributeError, RuntimeError):
-            # Manual fallback
+            # Plugin went missing between property set and pipeline run.
+            # Fall through to FILL_HOLES rather than fail the whole pipeline.
+            fixed = _fill_holes_manifold()
             method_used = "manual fill holes (3D Print Toolbox not available)"
-            bpy.ops.mesh.select_all(action="DESELECT")
-            bpy.ops.mesh.select_non_manifold(
-                extend=False,
-                use_wire=True,
-                use_boundary=True,
-                use_multi_face=True,
-                use_non_contiguous=True,
-                use_verts=True,
-            )
-            try:
-                bpy.ops.mesh.fill_holes(sides=32)
-                fixed = True
-            except RuntimeError:
-                pass
+    elif props.manifold_method == "FILL_HOLES":
+        fixed = _fill_holes_manifold()
+        method_used = "manual fill holes"
+    # OFF: no-op, method_used stays "none"
 
     # Delete loose
     bpy.ops.mesh.select_all(action="SELECT")
@@ -603,17 +622,19 @@ def _protect_uv_seams(obj):
         print(f"  [AI Optimizer] Vertex group creation failed: {exc}")
         return None
 
-    # Assign weights. Protected verts (seam endpoints + one-ring) get 1.0;
+    # Assign weights. Protected verts (seam endpoints + one-ring) get 0.5;
     # every other vert gets 0.1. With invert_vertex_group=True on the
-    # COLLAPSE modifier, weight=1.0 means max resistance to collapse.
+    # COLLAPSE modifier, these function as collapse costs — 0.5 is strongly
+    # biased against collapse but NOT immune, 0.1 is cheap. We deliberately
+    # avoid 1.0 here because Blender treats it as a hard "do-not-collapse"
+    # rather than a continuous bias, which stalls multi-pass COLLAPSE after
+    # pass 1 on fragmented-UV meshes (where >40% of verts end up protected —
+    # they occupy the entire remaining collapse budget of the quadric solver
+    # and later passes find nothing to do).
     protected_list = list(expanded)
     if protected_list:
-        group.add(index=protected_list, weight=1.0, type="REPLACE")
+        group.add(index=protected_list, weight=0.5, type="REPLACE")
 
-    # Explicitly weight every other vertex at 0.1 so the quadric solver sees
-    # the full contrast (a vertex not assigned to a group is treated as 0,
-    # which would make non-seam verts infinitely cheap to collapse instead
-    # of just 10x cheaper).
     all_other = [i for i in range(total_verts) if i not in expanded]
     if all_other:
         group.add(index=all_other, weight=0.1, type="REPLACE")
@@ -622,90 +643,90 @@ def _protect_uv_seams(obj):
 
 
 def decimate_single(context, obj, props):
-    """Dissolve coplanar faces, collapse-decimate, optionally planar-dissolve *obj*.
+    """Triangulate, planar-dissolve flat regions, collapse-decimate (optionally multi-pass) *obj*.
 
-    When ``props.decimate_passes > 1``, collapse decimation is split into N passes
-    targeting ``props.decimate_ratio`` overall. Per-pass ratio is
-    ``decimate_ratio ** (1/passes)`` so the cumulative ratio closely approximates
-    the final ratio. The dissolve pre-pass and seam-group build run once up
-    front; only the COLLAPSE modifier runs per iteration. Blender propagates
-    vertex-group weights through collapse, so the seam group stays correct
-    across passes without rebuilding.
+    The mesh is triangulated up front, then an unweighted planar DISSOLVE
+    merges flat regions into n-gons before COLLAPSE runs. Doing the planar
+    merge first lets COLLAPSE focus its budget on curved regions where the
+    quadric solver is most useful; leaving it for a post-pass (tried in
+    1.8.0-beta) caused COLLAPSE to stall after pass 1 with seam protection
+    on, because flat seam-adjacent regions were weight-blocked and COLLAPSE
+    ran out of cheap collapse candidates.
+
+    When ``props.decimate_passes > 1``, collapse decimation is split across
+    N passes. The per-pass ratio is computed *after* the planar pre-pass,
+    based on the remaining reduction needed to reach
+    ``start_faces * decimate_ratio``, so the planar dissolve doesn't compound
+    with the requested ratio and overshoot the user's target.
 
     When ``props.protect_uv_seams`` is True and the mesh has UV layers, a
     temporary vertex group ``AIOPT_Seam_Protect`` biases the COLLAPSE solver
     against collapsing seam-endpoint vertices and their one-ring neighbors.
-    The group is removed after decimation so the exported mesh stays clean.
+    Protected verts get weight 0.5 (strongly biased but not immune — weight
+    1.0 would make them hard-uncollapsible and stall multi-pass COLLAPSE on
+    fragmented-UV meshes). The group is removed after decimation so the
+    exported mesh stays clean.
 
-    When ``props.run_planar_postpass`` is True, a planar (DISSOLVE) decimate
-    modifier runs once after the collapse loop to merge near-coplanar faces
-    into n-gons (angle threshold ``props.planar_angle``). This reduces triangle
-    count in flat regions without touching curved surfaces.
+    When ``props.run_planar_prepass`` is True, a planar (DISSOLVE) decimate
+    modifier runs once before the collapse loop at angle threshold
+    ``props.planar_angle`` with ``delimit={"UV"}``.
 
-    The remove-doubles / normals / delete-loose cleanup runs once at the end.
+    The remove-doubles / delete-loose cleanup runs once at the end.
     """
     bpy.ops.object.select_all(action="DESELECT")
     context.view_layer.objects.active = obj
     obj.select_set(True)
 
     passes = max(1, int(getattr(props, "decimate_passes", 1)))
-    per_pass_ratio = props.decimate_ratio ** (1.0 / passes)
+    start_faces = len(obj.data.polygons)
+    target_faces = max(1, int(start_faces * props.decimate_ratio))
 
-    # Pre-pass: dissolve nearly-coplanar faces (cleans flat surfaces, preserves UVs)
-    if props.dissolve_angle > 0:
-        before = len(obj.data.polygons)
-        bpy.ops.object.mode_set(mode="EDIT")
-        bpy.ops.mesh.select_all(action="SELECT")
-        bpy.ops.mesh.dissolve_limited(angle_limit=props.dissolve_angle, delimit={"UV"})
-        bpy.ops.object.mode_set(mode="OBJECT")
-        after = len(obj.data.polygons)
-        print(f"  [AI Optimizer] Dissolve pre-pass: {before:,} -> {after:,} faces")
-
-    # Protect UV seams: build a vertex-group weight bias that the COLLAPSE
-    # solver treats as ~10x more expensive to collapse. Mesh topology is
-    # unchanged — the protection is a numerical cost bias, not a hard
-    # constraint. Off by default: on AI-generated meshes with fragmented
-    # UVs the protection degrades gracefully because most vertices end up
-    # in the protected set, reducing the relative bias.
+    # Protect UV seams: build the vertex-group weight bias before triangulation
+    # so seam-endpoint vertex indices are stable. Triangulation preserves vertex
+    # identity, only adding new edges, so the group stays valid.
     seam_group_name = None
     if getattr(props, "protect_uv_seams", False):
         seam_group_name = _protect_uv_seams(obj)
 
-    for pass_idx in range(passes):
-        before = len(obj.data.polygons)
-        mod = obj.modifiers.new(name="Decimate_Optimize", type="DECIMATE")
-        mod.decimate_type = "COLLAPSE"
-        mod.ratio = per_pass_ratio
-        # use_collapse_triangulate=False: when the dissolve pre-pass has merged
-        # near-coplanar tris into n-gons, forcing re-triangulation here undoes
-        # that work and makes the "ratio" math act on a larger-than-reported
-        # triangle count — so pass 1 can grow the face count instead of
-        # shrinking it. Downstream consumers (GLB exporter) triangulate anyway.
-        mod.use_collapse_triangulate = False
-        if seam_group_name:
-            mod.vertex_group = seam_group_name
-            mod.invert_vertex_group = True
-        bpy.ops.object.modifier_apply(modifier=mod.name)
-        after = len(obj.data.polygons)
-        actual_ratio = (after / before) if before > 0 else 0.0
-        print(
-            f"  [AI Optimizer] Decimate pass {pass_idx + 1}/{passes}: "
-            f"{before:,} -> {after:,} faces "
-            f"(ratio {actual_ratio:.3f}, requested {per_pass_ratio:.3f})"
-        )
+    # Triangulate up front so every COLLAPSE pass sees one-polygon-one-triangle.
+    # Without this, dissolving coplanar n-gons and then re-triangulating inside
+    # COLLAPSE inflates the face count on pass 1 and overshoots the estimate.
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.mesh.quads_convert_to_tris()
+    bpy.ops.object.mode_set(mode="OBJECT")
 
-    # Optional planar post-pass: merge adjacent near-coplanar faces into
-    # n-gons. Reduces triangle count in flat regions without touching curved
-    # surfaces. delimit={"UV"} preserves UV island boundaries natively.
-    if getattr(props, "run_planar_postpass", True) and props.planar_angle > 0:
-        before = len(obj.data.polygons)
+    # Planar pre-pass: merge adjacent near-coplanar faces into n-gons BEFORE
+    # COLLAPSE. Un-weighted (DISSOLVE ignores the vertex group), so it eats
+    # flat regions that COLLAPSE would later refuse under seam protection.
+    # delimit={"UV"} preserves UV island boundaries. Runs before COLLAPSE so
+    # the quadric solver can spend its budget on curved regions where it's
+    # actually useful.
+    if getattr(props, "run_planar_prepass", True) and props.planar_angle > 0:
         mod = obj.modifiers.new(name="Decimate_Planar", type="DECIMATE")
         mod.decimate_type = "DISSOLVE"
         mod.angle_limit = props.planar_angle
         mod.delimit = {"UV"}
         bpy.ops.object.modifier_apply(modifier=mod.name)
-        after = len(obj.data.polygons)
-        print(f"  [AI Optimizer] Planar post-pass: {before:,} -> {after:,} faces")
+
+    # Compute per-pass ratio AFTER the planar pre-pass. The planar pre-pass
+    # has already changed the face count COLLAPSE sees, so anchoring
+    # per_pass_ratio on props.decimate_ratio directly would compound the two
+    # reductions and undershoot the user's target. Solve for the ratio that
+    # takes current_faces down to target_faces over `passes` passes.
+    current_faces = len(obj.data.polygons)
+    overall_needed = 1.0 if current_faces <= target_faces else target_faces / current_faces
+    per_pass_ratio = max(0.01, min(1.0, overall_needed)) ** (1.0 / passes)
+
+    for _pass_idx in range(passes):
+        mod = obj.modifiers.new(name="Decimate_Optimize", type="DECIMATE")
+        mod.decimate_type = "COLLAPSE"
+        mod.ratio = per_pass_ratio
+        mod.use_collapse_triangulate = False
+        if seam_group_name:
+            mod.vertex_group = seam_group_name
+            mod.invert_vertex_group = True
+        bpy.ops.object.modifier_apply(modifier=mod.name)
 
     # Remove the seam-protect vertex group: its purpose ends with decimation
     # and we don't want diagnostic groups leaking into the exported GLB.
@@ -714,13 +735,9 @@ def decimate_single(context, obj, props):
         if group is not None:
             obj.vertex_groups.remove(group)
 
-    # Post-decimate cleanup: fix degenerate geometry without adding new faces
-    # (hole-filling creates faces with bad UVs that cause texture artifacts).
-    # Deliberately no normals_make_consistent here: on thin-shell meshes
-    # (draped covers, cloth, single-layer surfaces) the flood-fill algorithm
-    # flips whole face islands inside-out, producing apparent holes where the
-    # back-faces render. COLLAPSE preserves input winding so there's nothing
-    # for it to fix anyway.
+    # Post-decimate cleanup: merge close verts and delete stray loose geometry.
+    # No normals_make_consistent here: flood-fill flips islands inside-out on
+    # thin-shell meshes, and COLLAPSE preserves winding anyway.
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.mesh.remove_doubles(threshold=props.merge_distance_mm / 1000.0)

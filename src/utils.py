@@ -180,20 +180,21 @@ SAVEABLE_PROPS = [
     "run_clean_images",
     "run_clean_unused",
     "run_resize_textures",
-    "run_uv_dilate",
-    "uv_dilate_pixels",
     "run_export",
     "merge_distance_mm",
     "recalculate_normals",
-    "fix_manifold",
+    "manifold_method",
     "merge_materials",
     "merge_materials_threshold_pct",
     "join_meshes",
     "join_mode",
     "run_remove_interior",
     "interior_method",
-    "dissolve_angle",
     "decimate_ratio",
+    "decimate_passes",
+    "protect_uv_seams",
+    "run_planar_prepass",
+    "planar_angle",
     "bake_normal_map",
     "normal_map_resolution",
     "auto_cage_extrusion",
@@ -245,6 +246,40 @@ def load_defaults(props):
     try:
         with open(config_path) as f:
             data = json.load(f)
+
+        # One-shot migrations from pre-1.8.0 / 1.8.0-beta configs. Applied to the
+        # loaded dict before setattr so old keys can't reach the property group.
+
+        # fix_manifold (bool) -> manifold_method (enum). True -> FILL_HOLES
+        # (safe default), False -> OFF. fix_manifold=True does NOT migrate to
+        # PRINT3D because the Toolbox was damaging thin-shell meshes; users
+        # who want it can opt back in explicitly.
+        if "fix_manifold" in data:
+            if "manifold_method" not in data:
+                data["manifold_method"] = "FILL_HOLES" if data["fix_manifold"] else "OFF"
+            del data["fix_manifold"]
+
+        # dissolve_angle removed; planar_angle (post-pass) covers flat merging.
+        data.pop("dissolve_angle", None)
+
+        # UV dilate step removed entirely.
+        data.pop("run_uv_dilate", None)
+        data.pop("uv_dilate_pixels", None)
+
+        # protect_uv_seams forced to True. The "off" default that some saved
+        # configs have was based on a misdiagnosis (seam protection was blamed
+        # for texture damage that actually came from the 3D Print Toolbox).
+        if "protect_uv_seams" in data:
+            data["protect_uv_seams"] = True
+
+        # run_planar_postpass -> run_planar_prepass. The property was renamed
+        # after moving the planar DISSOLVE from after COLLAPSE to before it
+        # (see decimate_single). Preserve the user's on/off setting.
+        if "run_planar_postpass" in data:
+            if "run_planar_prepass" not in data:
+                data["run_planar_prepass"] = data["run_planar_postpass"]
+            del data["run_planar_postpass"]
+
         for key, value in data.items():
             if key in SAVEABLE_PROPS:
                 try:
