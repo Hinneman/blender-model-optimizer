@@ -534,39 +534,91 @@ def bake_normal_map_for_decimate(context, obj, highpoly, props):
 
 
 def _protect_uv_seams(obj):
-    """Mark UV-island boundaries as Sharp so DECIMATE preserves the UV layout.
+    """Build a vertex-group weight bias to protect UV-island boundaries from DECIMATE.
 
-    No-op when the mesh has no UV map. Auto-generates seams from islands when
-    the mesh has UVs but no explicit seams. Called before the DECIMATE
-    modifier is applied — the modifier respects Sharp edges as collapse
-    boundaries, which prevents texture smearing across UV seams.
+    Creates (or refreshes) a vertex group named ``AIOPT_Seam_Protect`` on
+    ``obj``. Seam-endpoint vertices and their one-ring neighbors receive
+    weight 1.0; every other vertex receives weight 0.1. When the caller
+    sets ``mod.vertex_group = "AIOPT_Seam_Protect"`` with
+    ``mod.invert_vertex_group = True`` on a COLLAPSE modifier, Blender's
+    quadric solver treats the weighted vertices as ~10x more expensive to
+    collapse. Mesh topology is not changed — the protection is a numerical
+    cost bias, not a hard constraint.
+
+    Returns ``"AIOPT_Seam_Protect"`` on success or ``None`` when the mesh
+    has no UV layer or seam detection fails. No-op on meshes without UVs.
     """
     import bmesh
 
     if not obj.data.uv_layers:
-        return
+        return None
 
-    # Auto-mark seams from islands if none exist yet
+    # Auto-mark seams from islands if none exist yet. seams_from_islands is
+    # a UV editor operator and requires Edit mode with a selection.
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     has_seams = any(e.seam for e in bm.edges)
     bm.free()
 
     if not has_seams:
-        bpy.ops.object.mode_set(mode="EDIT")
-        bpy.ops.mesh.select_all(action="SELECT")
-        bpy.ops.uv.seams_from_islands()
-        bpy.ops.object.mode_set(mode="OBJECT")
+        try:
+            bpy.ops.object.mode_set(mode="EDIT")
+            bpy.ops.mesh.select_all(action="SELECT")
+            bpy.ops.uv.seams_from_islands()
+            bpy.ops.object.mode_set(mode="OBJECT")
+        except RuntimeError as exc:
+            print(f"  [AI Optimizer] Seam detection failed: {exc}")
+            return None
 
-    # Mark all seam edges as Sharp
+    # Collect seam-endpoint vertex indices, then expand by one edge hop to
+    # include the immediate neighbors. Interior vertices that collapse onto
+    # a seam vertex are the main source of texture smearing; protecting the
+    # one-ring buffer blocks that collapse direction.
     bm = bmesh.new()
     bm.from_mesh(obj.data)
+    protected = set()
     for edge in bm.edges:
         if edge.seam:
-            edge.smooth = False  # smooth=False means "sharp"
-    bm.to_mesh(obj.data)
+            for v in edge.verts:
+                protected.add(v.index)
+    # One-ring expansion: for every protected vertex, add its neighbors.
+    bm.verts.ensure_lookup_table()
+    expanded = set(protected)
+    for idx in protected:
+        v = bm.verts[idx]
+        for e in v.link_edges:
+            other = e.other_vert(v)
+            expanded.add(other.index)
+    total_verts = len(bm.verts)
     bm.free()
-    obj.data.update()
+
+    # Remove any stale group from a previous run so weights don't accumulate.
+    existing = obj.vertex_groups.get("AIOPT_Seam_Protect")
+    if existing is not None:
+        obj.vertex_groups.remove(existing)
+
+    try:
+        group = obj.vertex_groups.new(name="AIOPT_Seam_Protect")
+    except RuntimeError as exc:
+        print(f"  [AI Optimizer] Vertex group creation failed: {exc}")
+        return None
+
+    # Assign weights. Protected verts (seam endpoints + one-ring) get 1.0;
+    # every other vert gets 0.1. With invert_vertex_group=True on the
+    # COLLAPSE modifier, weight=1.0 means max resistance to collapse.
+    protected_list = list(expanded)
+    if protected_list:
+        group.add(index=protected_list, weight=1.0, type="REPLACE")
+
+    # Explicitly weight every other vertex at 0.1 so the quadric solver sees
+    # the full contrast (a vertex not assigned to a group is treated as 0,
+    # which would make non-seam verts infinitely cheap to collapse instead
+    # of just 10x cheaper).
+    all_other = [i for i in range(total_verts) if i not in expanded]
+    if all_other:
+        group.add(index=all_other, weight=0.1, type="REPLACE")
+
+    return "AIOPT_Seam_Protect"
 
 
 def decimate_single(context, obj, props):
@@ -575,10 +627,15 @@ def decimate_single(context, obj, props):
     When ``props.decimate_passes > 1``, collapse decimation is split into N passes
     targeting ``props.decimate_ratio`` overall. Per-pass ratio is
     ``decimate_ratio ** (1/passes)`` so the cumulative ratio closely approximates
-    the final ratio. The dissolve pre-pass and UV seam protection run once
-    up front; only the COLLAPSE modifier runs per iteration, so the quadric
-    solver recomputes its error field between passes without re-constraining
-    already-protected seams.
+    the final ratio. The dissolve pre-pass and seam-group build run once up
+    front; only the COLLAPSE modifier runs per iteration. Blender propagates
+    vertex-group weights through collapse, so the seam group stays correct
+    across passes without rebuilding.
+
+    When ``props.protect_uv_seams`` is True and the mesh has UV layers, a
+    temporary vertex group ``AIOPT_Seam_Protect`` biases the COLLAPSE solver
+    against collapsing seam-endpoint vertices and their one-ring neighbors.
+    The group is removed after decimation so the exported mesh stays clean.
 
     When ``props.run_planar_postpass`` is True, a planar (DISSOLVE) decimate
     modifier runs once after the collapse loop to merge near-coplanar faces
@@ -601,19 +658,24 @@ def decimate_single(context, obj, props):
         bpy.ops.mesh.dissolve_limited(angle_limit=props.dissolve_angle, delimit={"UV"})
         bpy.ops.object.mode_set(mode="OBJECT")
 
-    # Protect UV seams: mark island boundaries Sharp so DECIMATE doesn't
-    # collapse edges that define the texture layout. Run once — seam and
-    # sharp flags are preserved by subsequent collapses. Off by default:
-    # AI-generated meshes typically have fragmented UVs that create fan
-    # artifacts when seams are protected.
+    # Protect UV seams: build a vertex-group weight bias that the COLLAPSE
+    # solver treats as ~10x more expensive to collapse. Mesh topology is
+    # unchanged — the protection is a numerical cost bias, not a hard
+    # constraint. Off by default: on AI-generated meshes with fragmented
+    # UVs the protection degrades gracefully because most vertices end up
+    # in the protected set, reducing the relative bias.
+    seam_group_name = None
     if getattr(props, "protect_uv_seams", False):
-        _protect_uv_seams(obj)
+        seam_group_name = _protect_uv_seams(obj)
 
     for _ in range(passes):
         mod = obj.modifiers.new(name="Decimate_Optimize", type="DECIMATE")
         mod.decimate_type = "COLLAPSE"
         mod.ratio = per_pass_ratio
         mod.use_collapse_triangulate = True
+        if seam_group_name:
+            mod.vertex_group = seam_group_name
+            mod.invert_vertex_group = True
         bpy.ops.object.modifier_apply(modifier=mod.name)
 
     # Optional planar post-pass: merge adjacent near-coplanar faces into
@@ -625,6 +687,13 @@ def decimate_single(context, obj, props):
         mod.angle_limit = props.planar_angle
         mod.delimit = {"UV"}
         bpy.ops.object.modifier_apply(modifier=mod.name)
+
+    # Remove the seam-protect vertex group: its purpose ends with decimation
+    # and we don't want diagnostic groups leaking into the exported GLB.
+    if seam_group_name:
+        group = obj.vertex_groups.get(seam_group_name)
+        if group is not None:
+            obj.vertex_groups.remove(group)
 
     # Post-decimate cleanup: fix degenerate geometry without adding new faces
     # (hole-filling creates faces with bad UVs that cause texture artifacts)
