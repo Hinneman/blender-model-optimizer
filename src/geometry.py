@@ -653,10 +653,13 @@ def decimate_single(context, obj, props):
 
     # Pre-pass: dissolve nearly-coplanar faces (cleans flat surfaces, preserves UVs)
     if props.dissolve_angle > 0:
+        before = len(obj.data.polygons)
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_all(action="SELECT")
         bpy.ops.mesh.dissolve_limited(angle_limit=props.dissolve_angle, delimit={"UV"})
         bpy.ops.object.mode_set(mode="OBJECT")
+        after = len(obj.data.polygons)
+        print(f"  [AI Optimizer] Dissolve pre-pass: {before:,} -> {after:,} faces")
 
     # Protect UV seams: build a vertex-group weight bias that the COLLAPSE
     # solver treats as ~10x more expensive to collapse. Mesh topology is
@@ -668,25 +671,41 @@ def decimate_single(context, obj, props):
     if getattr(props, "protect_uv_seams", False):
         seam_group_name = _protect_uv_seams(obj)
 
-    for _ in range(passes):
+    for pass_idx in range(passes):
+        before = len(obj.data.polygons)
         mod = obj.modifiers.new(name="Decimate_Optimize", type="DECIMATE")
         mod.decimate_type = "COLLAPSE"
         mod.ratio = per_pass_ratio
-        mod.use_collapse_triangulate = True
+        # use_collapse_triangulate=False: when the dissolve pre-pass has merged
+        # near-coplanar tris into n-gons, forcing re-triangulation here undoes
+        # that work and makes the "ratio" math act on a larger-than-reported
+        # triangle count — so pass 1 can grow the face count instead of
+        # shrinking it. Downstream consumers (GLB exporter) triangulate anyway.
+        mod.use_collapse_triangulate = False
         if seam_group_name:
             mod.vertex_group = seam_group_name
             mod.invert_vertex_group = True
         bpy.ops.object.modifier_apply(modifier=mod.name)
+        after = len(obj.data.polygons)
+        actual_ratio = (after / before) if before > 0 else 0.0
+        print(
+            f"  [AI Optimizer] Decimate pass {pass_idx + 1}/{passes}: "
+            f"{before:,} -> {after:,} faces "
+            f"(ratio {actual_ratio:.3f}, requested {per_pass_ratio:.3f})"
+        )
 
     # Optional planar post-pass: merge adjacent near-coplanar faces into
     # n-gons. Reduces triangle count in flat regions without touching curved
     # surfaces. delimit={"UV"} preserves UV island boundaries natively.
     if getattr(props, "run_planar_postpass", True) and props.planar_angle > 0:
+        before = len(obj.data.polygons)
         mod = obj.modifiers.new(name="Decimate_Planar", type="DECIMATE")
         mod.decimate_type = "DISSOLVE"
         mod.angle_limit = props.planar_angle
         mod.delimit = {"UV"}
         bpy.ops.object.modifier_apply(modifier=mod.name)
+        after = len(obj.data.polygons)
+        print(f"  [AI Optimizer] Planar post-pass: {before:,} -> {after:,} faces")
 
     # Remove the seam-protect vertex group: its purpose ends with decimation
     # and we don't want diagnostic groups leaking into the exported GLB.
@@ -696,11 +715,15 @@ def decimate_single(context, obj, props):
             obj.vertex_groups.remove(group)
 
     # Post-decimate cleanup: fix degenerate geometry without adding new faces
-    # (hole-filling creates faces with bad UVs that cause texture artifacts)
+    # (hole-filling creates faces with bad UVs that cause texture artifacts).
+    # Deliberately no normals_make_consistent here: on thin-shell meshes
+    # (draped covers, cloth, single-layer surfaces) the flood-fill algorithm
+    # flips whole face islands inside-out, producing apparent holes where the
+    # back-faces render. COLLAPSE preserves input winding so there's nothing
+    # for it to fix anyway.
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.mesh.remove_doubles(threshold=props.merge_distance_mm / 1000.0)
-    bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.mesh.delete_loose(use_verts=True, use_edges=True, use_faces=False)
     bpy.ops.object.mode_set(mode="OBJECT")
 

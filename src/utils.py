@@ -180,6 +180,8 @@ SAVEABLE_PROPS = [
     "run_clean_images",
     "run_clean_unused",
     "run_resize_textures",
+    "run_uv_dilate",
+    "uv_dilate_pixels",
     "run_export",
     "merge_distance_mm",
     "recalculate_normals",

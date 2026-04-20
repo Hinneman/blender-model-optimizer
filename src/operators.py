@@ -18,6 +18,7 @@ from .materials import join_meshes_by_material, merge_duplicate_materials
 from .textures import (
     clean_images_all,
     clean_unused_all,
+    dilate_gutters_all,
     resize_texture_single,
 )
 from .utils import (
@@ -237,6 +238,22 @@ class AIOPT_OT_resize_textures(Operator):
         return {"FINISHED"}
 
 
+class AIOPT_OT_uv_dilate(Operator):
+    bl_idname = "ai_optimizer.uv_dilate"
+    bl_label = "Dilate UV Gutters"
+    bl_description = (
+        "Bleed each UV island's edge colors outward into the surrounding gutter "
+        "so post-decimate UV drift no longer samples unpainted pixels"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        props = context.scene.ai_optimizer
+        _modified, detail = dilate_gutters_all(context, props)
+        self.report({"INFO"}, detail)
+        return {"FINISHED"}
+
+
 class AIOPT_OT_export_glb(Operator):
     bl_idname = "ai_optimizer.export_glb"
     bl_label = "Export GLB"
@@ -369,6 +386,15 @@ class AIOPT_OT_run_all(Operator):
                     self._setup_resize_textures,
                     self._tick_resize_textures,
                     self._teardown_resize_textures,
+                )
+            )
+        if props.run_uv_dilate:
+            self._steps.append(
+                (
+                    "Dilate UV Gutters",
+                    self._setup_uv_dilate,
+                    self._tick_uv_dilate,
+                    self._teardown_uv_dilate,
                 )
             )
         if props.run_lod:
@@ -862,6 +888,22 @@ class AIOPT_OT_run_all(Operator):
 
     def _teardown_resize_textures(self, context):
         return f"Resized {self._resized_count} texture(s)"
+
+    # -- Dilate UV Gutters --
+
+    def _setup_uv_dilate(self, context):
+        self._sub_items = [None]
+        self._uv_dilate_detail = ""
+        return 1
+
+    def _tick_uv_dilate(self, context, index):
+        props = context.scene.ai_optimizer
+        _modified, detail = dilate_gutters_all(context, props, token=self._token)
+        self._uv_dilate_detail = detail
+        return detail
+
+    def _teardown_uv_dilate(self, context):
+        return self._uv_dilate_detail
 
     # -- LOD Generation --
 

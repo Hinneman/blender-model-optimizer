@@ -28,6 +28,15 @@ class AIOPT_Properties(PropertyGroup):
     run_resize_textures: BoolProperty(
         name="Resize Textures", default=True, description="Resize textures to max size", update=_tag_3d_redraw
     )
+    run_uv_dilate: BoolProperty(
+        name="Dilate UV Gutters",
+        default=True,
+        description=(
+            "Bleed each UV island's edge colors outward into the surrounding texture gutter. "
+            "Prevents black smears on fragmented-UV meshes where post-decimate UV drift would "
+            "otherwise sample unpainted pixels between islands"
+        ),
+    )
     run_export: BoolProperty(name="Export GLB", default=True, description="Export optimized GLB")
 
     # -- Geometry settings --
@@ -250,6 +259,17 @@ class AIOPT_Properties(PropertyGroup):
         default="DOWNSIZE",
         description="How to handle texture resizing",
         update=_tag_3d_redraw,
+    )
+    uv_dilate_pixels: IntProperty(
+        name="Dilate Pixels",
+        default=8,
+        min=1,
+        max=64,
+        description=(
+            "Number of pixels to bleed UV-island edge colors outward into the gutter. "
+            "Higher values cover larger UV drift at the cost of more processing time. "
+            "8 is a good default for most meshes; raise to 16+ if you still see black smears"
+        ),
     )
 
     # -- Export settings --

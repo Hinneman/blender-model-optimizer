@@ -521,11 +521,13 @@ class AIOPT_PT_textures_panel(Panel):
         layout = self.layout
         props = context.scene.ai_optimizer
 
-        # Pipeline toggles for the three texture steps
+        # Pipeline toggles for the texture steps
         row = layout.row(align=True)
         row.prop(props, "run_clean_images", toggle=True, text="Clean Images")
         row.prop(props, "run_clean_unused", toggle=True, text="Clean Unused")
         row.prop(props, "run_resize_textures", toggle=True, text="Resize")
+        row = layout.row(align=True)
+        row.prop(props, "run_uv_dilate", toggle=True, text="Dilate UV Gutters")
 
         layout.separator()
 
@@ -550,6 +552,13 @@ class AIOPT_PT_textures_panel(Panel):
 
         layout.separator()
         layout.operator("ai_optimizer.resize_textures", icon="FULLSCREEN_EXIT")
+
+        layout.separator()
+
+        col = layout.column(align=True)
+        col.label(text="UV Gutter Dilation:", icon="UV_DATA")
+        col.prop(props, "uv_dilate_pixels")
+        col.operator("ai_optimizer.uv_dilate", icon="BRUSH_DATA")
 
 
 class AIOPT_PT_export_panel(Panel):
