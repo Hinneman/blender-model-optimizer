@@ -27,6 +27,7 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 - **Pipeline Summary** — Results panel shows total face reduction, export file size, and elapsed time at a glance
 - **Cancellable Pipeline** — Cancel mid-pipeline with ESC or a Cancel button; all changes are automatically undone
 - **Presets** — Save, load, and reset default settings across sessions
+- **Verbose Logging** *(opt-in)* — Detailed per-step diagnostics (settings consumed, checkpoints, elapsed time) with an **Open Debug Log** button to write the buffered log to a file and open it in your OS text editor
 
 ## Requirements
 

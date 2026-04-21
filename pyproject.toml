@@ -1,6 +1,6 @@
 [project]
 name = "blender-model-optimizer"
-version = "1.9.0"
+version = "1.9.1"
 description = "Blender add-on to optimize AI-generated 3D models"
 requires-python = ">=3.10"
 
