@@ -126,30 +126,31 @@ def test_zero_size_image_is_skipped(stub_images):
 # ------------------------- texture compression ratios ---------------------
 
 
-def test_png_ratio_is_5(stub_images):
+def test_png_ratio_is_3(stub_images):
     stub_images([_Img(size=(64, 64))])
     raw = 64 * 64 * 4
     size = estimate_glb_size([], _props(image_format="NONE"))
-    assert size == pytest.approx(raw / 5.0 + OVERHEAD)
+    assert size == pytest.approx(raw / 3.0 + OVERHEAD)
 
 
-def test_webp_ratio_spans_15_to_80(stub_images):
+def test_webp_ratio_spans_8_to_60(stub_images):
     stub_images([_Img(size=(64, 64))])
     raw = 64 * 64 * 4
     q100 = estimate_glb_size([], _props(image_format="WEBP", image_quality=100))
     q1 = estimate_glb_size([], _props(image_format="WEBP", image_quality=1))
-    assert q100 == pytest.approx(raw / 15.0 + OVERHEAD)
-    # q=1 → ratio 15 + 0.99 * 65 ≈ 79.35
-    assert q1 == pytest.approx(raw / (15.0 + 0.99 * 65.0) + OVERHEAD)
+    assert q100 == pytest.approx(raw / 8.0 + OVERHEAD)
+    # q=1 → ratio 8 + 0.99 * 52 ≈ 59.48
+    assert q1 == pytest.approx(raw / (8.0 + 0.99 * 52.0) + OVERHEAD)
 
 
-def test_jpeg_ratio_spans_10_to_50(stub_images):
+def test_jpeg_ratio_spans_5_to_35(stub_images):
     stub_images([_Img(size=(64, 64))])
     raw = 64 * 64 * 4
     q100 = estimate_glb_size([], _props(image_format="JPEG", image_quality=100))
     q1 = estimate_glb_size([], _props(image_format="JPEG", image_quality=1))
-    assert q100 == pytest.approx(raw / 10.0 + OVERHEAD)
-    assert q1 == pytest.approx(raw / (10.0 + 0.99 * 40.0) + OVERHEAD)
+    assert q100 == pytest.approx(raw / 5.0 + OVERHEAD)
+    # q=1 → ratio 5 + 0.99 * 30 ≈ 34.7
+    assert q1 == pytest.approx(raw / (5.0 + 0.99 * 30.0) + OVERHEAD)
 
 
 # ------------------------- resize modes -----------------------------------
@@ -161,7 +162,7 @@ def test_resize_mode_all_forces_max_size(stub_images):
     size = estimate_glb_size(
         [], _props(run_resize_textures=True, resize_mode="ALL", max_texture_size=512, image_format="NONE")
     )
-    assert size == pytest.approx(raw / 5.0 + OVERHEAD)
+    assert size == pytest.approx(raw / 3.0 + OVERHEAD)
 
 
 def test_resize_mode_downsize_leaves_smaller_images_alone(stub_images):
@@ -170,7 +171,7 @@ def test_resize_mode_downsize_leaves_smaller_images_alone(stub_images):
     size = estimate_glb_size(
         [], _props(run_resize_textures=True, resize_mode="DOWNSIZE", max_texture_size=1024, image_format="NONE")
     )
-    assert size == pytest.approx(raw / 5.0 + OVERHEAD)
+    assert size == pytest.approx(raw / 3.0 + OVERHEAD)
 
 
 def test_resize_mode_downsize_scales_larger_images(stub_images):
@@ -180,7 +181,7 @@ def test_resize_mode_downsize_scales_larger_images(stub_images):
     size = estimate_glb_size(
         [], _props(run_resize_textures=True, resize_mode="DOWNSIZE", max_texture_size=1024, image_format="NONE")
     )
-    assert size == pytest.approx(raw / 5.0 + OVERHEAD)
+    assert size == pytest.approx(raw / 3.0 + OVERHEAD)
 
 
 # ------------------------- normal map bake --------------------------------
@@ -191,4 +192,4 @@ def test_normal_map_bake_adds_texture(stub_images):
     baseline = estimate_glb_size([], _props(bake_normal_map=False))
     baked = estimate_glb_size([], _props(bake_normal_map=True, normal_map_resolution=256, image_format="NONE"))
     nmap_raw = 256 * 256 * 3
-    assert baked - baseline == pytest.approx(nmap_raw / 5.0)
+    assert baked - baseline == pytest.approx(nmap_raw / 3.0)

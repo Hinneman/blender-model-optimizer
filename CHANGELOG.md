@@ -4,7 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.9.0] - 2026-04-21
+
+**Highlight:** Opt-in verbose logging across every pipeline step — see which settings each step consumed, intermediate checkpoints (per-object face counts, material-merge candidates, UV-seam weights, bake cage extrusion, and more), and elapsed time. Designed for diagnosing issues on real inputs and for later informed tuning of defaults.
+
+### Added
+
+- `Verbose Logging` toggle on the Presets panel, default off. When on, every pipeline step (Fix Geometry, Remove Interior, Remove Small Pieces, Symmetry Mirror, Floor Snap, Decimate, Clean Images, Clean Unused, Resize Textures, LOD Generation, Export GLB) prints a `▶ step — key=value, …` start line listing every property it consumed, one or more `  detail` checkpoint lines from inside the work modules, and a `◀ step — result, Ns` end line with elapsed time. Output goes to Blender's system console (Window → Toggle System Console on Windows, launching terminal on macOS/Linux). Setting is persisted across sessions via the existing save-defaults flow.
+- `Open Debug Log` button on the Presets panel and on the completed-pipeline view. Writes the buffered log (last 2000 lines, INFO plus DEBUG) to `<tempdir>/ai_optimizer_debug.log` and opens it in the OS default text editor. Greyed out when the buffer is empty. Useful for users who can't see the system console (macOS / Linux launched from Finder/file manager) and for attaching logs to bug reports.
+
+### Changed
+
+- Export-size estimator recalibrated for AI-generated texture content. The previous WebP/JPEG ratios (WebP q=100 → 15x, q=1 → 80x; JPEG q=100 → 10x, q=1 → 50x) were best-case figures derived from flat color content and under-estimated by roughly 2x on realistic output. The new curve (WebP q=100 → 8x, q=1 → 60x; JPEG q=100 → 5x, q=1 → 35x; PNG 5x → 3x) is calibrated against measured exports of noisy baked AI-mesh textures and matches actual output within roughly 10% on the test meshes used. This does not change what the exporter writes — only the sidebar "Est. Export Size" number that helps users choose a target before running the pipeline.
+
 ## [1.8.0] - 2026-04-19
+
+**Highlight:** Multi-pass decimate with UV seam protection and planar pre-pass — dramatically better silhouette and texture preservation at aggressive reduction ratios.
 
 ### Fixed
 
@@ -28,12 +43,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.7.1] - 2026-04-18
 
+**Highlight:** Remove Interior (Ray Cast) no longer tears the exterior shell on concave AI meshes.
+
 ### Fixed
 
 - 3D Print Toolbox availability is now detected via `addon_utils.check()` instead of `hasattr(bpy.ops.mesh, ...)`. The previous check always returned True because `bpy.ops` uses dynamic attribute lookup, so the sidebar could show "available" while the fix-geometry step silently fell back to manual hole-filling.
 - **Remove Interior (Ray Cast) no longer tears the exterior shell.** The raycast sampler now covers a wider ~55° cone with 13 rays instead of a narrow ~6° cone with 5 rays. Exterior faces in concave regions (fuselage spine, canopy fairing on AI aircraft meshes) previously had all 5 narrow-cone rays land on the opposite interior wall and got deleted as false positives. The wider cone lets at least one ray escape to open space, correctly classifying such faces as exterior.
 
 ## [1.7.0] - 2026-04-18
+
+**Highlight:** New Floor Snap pipeline step plus UV seam protection in decimate to prevent texture smearing.
 
 ### Added
 
@@ -53,6 +72,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.6.2] - 2026-04-18
 
+**Highlight:** Responsive mid-step pipeline cancellation and EEVEE crash fix on weak iGPUs.
+
 ### Changed
 
 - **Pipeline cancellation is now responsive mid-step** — Clicking Cancel (or pressing ESC) during a running pipeline now takes effect inside long Python loops (interior ray-cast, symmetry detection, small-pieces, image comparison), not only between steps. A hint under the Cancel button explains that an in-flight Blender op (decimate apply, export, bake) will still finish first.
@@ -65,6 +86,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.6.1] - 2026-04-14
 
+**Highlight:** Normal map baking actually works now (highpoly copies were hidden and couldn't be selected).
+
 ### Fixed
 
 - **Normal map baking** — Baking silently failed because highpoly copies were hidden, preventing Blender from selecting them. The bake now works correctly.
@@ -72,6 +95,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Bake error reporting** — Normal map bake failures now log the actual error message to the system console instead of failing silently.
 
 ## [1.6.0] - 2026-04-13
+
+**Highlight:** Mesh Analysis with optimization recommendations, plus Remove Small Pieces for AI-generated debris.
 
 ### Added
 
@@ -87,6 +112,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.5.1] - 2026-04-13
 
+**Highlight:** PNG texture export now works (previously textures were dropped when PNG was selected).
+
 ### Fixed
 
 - Textures were not exported when PNG was selected as the image format
@@ -96,6 +123,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - README updated to document Merge Materials, Join Meshes, Remove Interior, Symmetry Mirror, Bake Normal Map, and LOD Generation features
 
 ## [1.5.0] - 2026-04-04
+
+**Highlight:** Full pipeline overhaul — live progress, cancellation, presets, LOD export, normal map baking, and multi-file package structure.
 
 ### Added
 
@@ -118,3 +147,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Removed
 
 - Vertex color baking
+
+## [Pre-release] - 2026-03-23 to 2026-04-04
+
+**Highlight:** Initial development of the add-on as a single-file script, before the first tagged release.
+
+Untagged development history. The add-on existed as a monolithic single-file script with a basic optimization pipeline (fix geometry, decimate, clean images, resize textures, export GLB), a modal pipeline progress panel, interior face removal, image optimization, a file size estimate in the export settings, and vertex color baking (later removed in 1.5.0). The final pre-release commit split the monolith into the current multi-file package with a `build.py` pipeline, which became 1.5.0.

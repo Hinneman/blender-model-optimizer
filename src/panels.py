@@ -208,6 +208,8 @@ class AIOPT_PT_progress_panel(Panel):
                         row = col.row()
                         row.label(text=f"    {line}")
 
+        row = layout.row()
+        row.operator("ai_optimizer.open_debug_log", icon="FILE_TEXT")
         layout.operator("ai_optimizer.dismiss_pipeline", icon="X")
 
     def _draw_cancelled(self, layout, state, results, all_names):
@@ -627,3 +629,9 @@ class AIOPT_PT_presets_panel(Panel):
             col = layout.column(align=True)
             col.scale_y = 0.8
             col.label(text="No saved defaults yet", icon="INFO")
+
+        layout.separator()
+        props = context.scene.ai_optimizer
+        layout.prop(props, "verbose_logging")
+        row = layout.row()
+        row.operator("ai_optimizer.open_debug_log", icon="FILE_TEXT")
