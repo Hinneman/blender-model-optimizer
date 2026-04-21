@@ -143,4 +143,4 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [GNU General Public License v3.0 or later](LICENSE).

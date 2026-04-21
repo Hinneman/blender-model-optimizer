@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "ai_model_optimizer"
-version = "2.0.0"
+version = "2.0.1"
 name = "AI 3D Model Optimizer"
 tagline = "Optimize AI-generated 3D models for web and real-time use"
 maintainer = "René Voigt <hinneman@gmail.com>"
@@ -12,11 +12,11 @@ tags = ["Mesh"]
 
 blender_version_min = "4.2.0"
 
-license = ["SPDX:MIT"]
+license = ["SPDX:GPL-3.0-or-later"]
 copyright = ["2026 René Voigt"]
 
 [permissions]
-files = "Export optimized 3D models, write debug logs, and open them in the OS text editor"
+files = "Export optimized 3D models and write debug logs"
 
 [build]
 paths_exclude_pattern = [

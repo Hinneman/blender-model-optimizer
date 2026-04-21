@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.1] - 2026-04-21
+
+### Changed
+
+- **License changed from MIT to GPL-3.0-or-later.** Blender's extensions platform requires add-ons to be licensed under GPL-3.0-or-later (or a compatible later version), so the upload of v2.0.0 to extensions.blender.org was rejected. The `LICENSE` file now contains the GPL-3.0 text and the manifest declares `SPDX:GPL-3.0-or-later`.
+- Shortened the `permissions.files` reason in the manifest to stay within Blender's 64-character limit (extension validator rejected the longer v2.0.0 string).
+
 ## [2.0.0] - 2026-04-21
 
 **Highlight:** Packaged as a Blender extension for [extensions.blender.org](https://extensions.blender.org). Install via `Edit → Preferences → Get Extensions` on Blender 4.2+, or sideload the `.zip` from GitHub releases.

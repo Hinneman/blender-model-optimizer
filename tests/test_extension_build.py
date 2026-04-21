@@ -100,7 +100,7 @@ def test_manifest_required_fields(built_zip):
     assert data["id"] == "ai_model_optimizer"
     assert data["type"] == "add-on"
     assert data["blender_version_min"] == "4.2.0"
-    assert data["license"] == ["SPDX:MIT"]
+    assert data["license"] == ["SPDX:GPL-3.0-or-later"]
     assert "files" in data["permissions"]
 
 
