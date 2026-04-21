@@ -5,9 +5,9 @@
 This project uses **ruff** for linting and formatting. Configuration is in `pyproject.toml`.
 
 ```bash
-ruff check src/          # lint
-ruff check src/ --fix    # lint and auto-fix
-ruff format src/         # format
+ruff check ai_model_optimizer/          # lint
+ruff check ai_model_optimizer/ --fix    # lint and auto-fix
+ruff format ai_model_optimizer/         # format
 ```
 
 ## Blender Add-on Conventions
@@ -29,7 +29,7 @@ ruff format src/         # format
 
 ## Project Architecture
 
-- **Multi-file package**: Source is split into domain modules under `src/`. A build step (`python build.py`) concatenates them into a single installable `.py` in `build/`.
+- **Multi-file package**: Source lives under `ai_model_optimizer/`. A build step (`python build.py`) packages it into a Blender extension `.zip` in `build/`, with `blender_manifest.toml` and `LICENSE` at the zip root.
 - **Module layout**:
   - `utils.py` — shared helpers, config, export
   - `textures.py` — image cleanup, resizing, vertex color baking
@@ -38,8 +38,8 @@ ruff format src/         # format
   - `properties.py` — property groups
   - `operators.py` — all operator classes
   - `panels.py` — all panel classes
-  - `__init__.py` — bl_info, registration
-- **Version management**: Single source of truth is `pyproject.toml`. The build script injects the version into `bl_info`. Tag with `v*` to trigger a GitHub release.
+  - `__init__.py` — registration
+- **Version management**: Single source of truth is `pyproject.toml`. The build script injects the version into `blender_manifest.toml` inside the built zip. Tag with `v*` to trigger a GitHub release.
 - **Adding a pipeline step** requires:
   1. New `AIOPT_OT_<name>` operator class in `operators.py`
   2. `BoolProperty` toggle in `AIOPT_Properties` in `properties.py` (e.g., `run_<name>`)
@@ -50,7 +50,7 @@ ruff format src/         # format
 
 ## Things to Avoid
 
-- Don't import modules at function scope unless they're optional/heavy — use module-level imports (after `bl_info`).
+- Don't import modules at function scope unless they're optional/heavy — use module-level imports.
 - Don't use `bpy.context` in module scope — it's not reliable during registration. Pass context from operators.
 - Don't hardcode paths — use `bpy.utils.user_resource()` or `bpy.data.filepath`.
 - Don't modify `bpy.data` outside of operators — changes won't be undoable.

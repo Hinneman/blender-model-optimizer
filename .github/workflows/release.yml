@@ -41,7 +41,7 @@ jobs:
       - name: Lint
         run: |
           pip install ruff
-          ruff check src/ tests/
+          ruff check ai_model_optimizer/ tests/
 
       - name: Test
         run: |
@@ -74,4 +74,4 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           body_path: release_body.md
-          files: build/model-optimizer-addon.py
+          files: build/ai_model_optimizer-*.zip

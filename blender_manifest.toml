@@ -1,0 +1,26 @@
+schema_version = "1.0.0"
+
+id = "ai_model_optimizer"
+version = "2.0.0"
+name = "AI 3D Model Optimizer"
+tagline = "Optimize AI-generated 3D models for web and real-time use"
+maintainer = "René Voigt <hinneman@gmail.com>"
+type = "add-on"
+
+website = "https://github.com/Hinneman/blender-model-optimizer"
+tags = ["Mesh"]
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:MIT"]
+copyright = ["2026 René Voigt"]
+
+[permissions]
+files = "Export optimized 3D models, write debug logs, and open them in the OS text editor"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "*.pyc",
+  ".*",
+]

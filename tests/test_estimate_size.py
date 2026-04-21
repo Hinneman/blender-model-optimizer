@@ -6,10 +6,10 @@ import types
 
 import pytest
 
-from src import utils
-from src.utils import estimate_glb_size
+from ai_model_optimizer import utils
+from ai_model_optimizer.utils import estimate_glb_size
 
-OVERHEAD = 10 * 1024  # matches src/utils.py
+OVERHEAD = 10 * 1024  # matches ai_model_optimizer/utils.py
 
 
 def _props(**overrides):

@@ -2,19 +2,20 @@
 
 ## Project Overview
 
-Blender add-on ("AI 3D Model Optimizer") that optimizes AI-generated 3D models for web/real-time use. Multi-file Python package targeting Blender 4.0+, with a build step that produces a single installable `.py`.
+Blender add-on ("AI 3D Model Optimizer") that optimizes AI-generated 3D models for web/real-time use. Multi-file Python package targeting Blender 4.2+, distributed as a Blender extension `.zip` on [extensions.blender.org](https://extensions.blender.org).
 
 ## Structure
 
-- `src/__init__.py` — bl_info, register/unregister
-- `src/operators.py` — All AIOPT_OT_* operator classes
-- `src/panels.py` — All AIOPT_PT_* panel classes
-- `src/properties.py` — Property groups (AIOPT_Properties, AIOPT_PipelineState)
-- `src/geometry.py` — Geometry fixing, decimation, interior removal, symmetry
-- `src/textures.py` — Image cleanup, resizing, fingerprinting, vertex color baking
-- `src/materials.py` — Material merging, mesh joining
-- `src/utils.py` — Shared helpers (logging, config, mesh selection, size estimation, export)
-- `build.py` — Build script to produce single-file addon
+- `ai_model_optimizer/__init__.py` — register/unregister
+- `ai_model_optimizer/operators.py` — All AIOPT_OT_* operator classes
+- `ai_model_optimizer/panels.py` — All AIOPT_PT_* panel classes
+- `ai_model_optimizer/properties.py` — Property groups (AIOPT_Properties, AIOPT_PipelineState)
+- `ai_model_optimizer/geometry.py` — Geometry fixing, decimation, interior removal, symmetry
+- `ai_model_optimizer/textures.py` — Image cleanup, resizing, fingerprinting, vertex color baking
+- `ai_model_optimizer/materials.py` — Material merging, mesh joining
+- `ai_model_optimizer/utils.py` — Shared helpers (logging, config, mesh selection, size estimation, export)
+- `blender_manifest.toml` — Extension metadata (id, version, permissions, etc.)
+- `build.py` — Build script to produce the extension `.zip`
 
 ## Key Concepts
 
@@ -27,21 +28,23 @@ Blender add-on ("AI 3D Model Optimizer") that optimizes AI-generated 3D models f
 
 ## Build
 
-- Run `python build.py` to produce `build/model-optimizer-addon.py`
-- The build reads version from `pyproject.toml` and injects it into `bl_info`
-- Install the built file in Blender: Edit → Preferences → Add-ons → Install from Disk
+- Run `python build.py` to produce `build/ai_model_optimizer-<version>.zip`
+- The build reads version from `pyproject.toml` and injects it into `blender_manifest.toml` inside the zip
+- Sideload in Blender: drag-and-drop the zip, or Edit → Preferences → Add-ons → Install from Disk
+- Before tagging a release, run `scripts/validate.ps1` (Windows) or `scripts/validate.sh` (POSIX) to run `blender --command extension validate` against the built zip
 
 ## Releasing
 
-- Update version in `pyproject.toml`
-- Commit and tag: `git tag v1.5.0 && git push --tags`
-- GitHub Action builds and creates a release with the addon `.py` attached
+- Update version in `pyproject.toml` and add a matching `CHANGELOG.md` entry
+- Commit and tag: `git tag vX.Y.Z && git push --tags`
+- GitHub Action builds and creates a release with the extension `.zip` attached
+- Manually upload the zip to extensions.blender.org — see [RELEASING.md](../RELEASING.md)
 
 ## Development
 
 - No external dependencies beyond Blender's bundled Python
-- **Linting**: `ruff check src/` — config in `pyproject.toml`
-- **Formatting**: `ruff format src/`
+- **Linting**: `ruff check ai_model_optimizer/` — config in `pyproject.toml`
+- **Formatting**: `ruff format ai_model_optimizer/`
 - See [BEST_PRACTICES.md](BEST_PRACTICES.md) for coding conventions and guidelines
 
 ## Working with Claude

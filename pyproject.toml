@@ -1,6 +1,6 @@
 [project]
 name = "blender-model-optimizer"
-version = "1.9.1"
+version = "2.0.0"
 description = "Blender add-on to optimize AI-generated 3D models"
 requires-python = ">=3.10"
 
@@ -21,7 +21,7 @@ select = [
     "RUF",  # ruff-specific rules
 ]
 ignore = [
-    "E402",   # module-level imports not at top — required for Blender bl_info dict
+    "E402",   # module-level imports not at top — Blender add-on files may defer heavy imports
     "N801",   # class name should use CapWords — Blender enforces ADDON_OT_/PT_ prefixes
     "N802",   # function name should be lowercase — Blender API callbacks (draw, execute, etc.)
     "N806",   # variable in function should be lowercase — Blender constants
@@ -31,9 +31,8 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Blender add-on files need bl_info before imports
-"src/*.py" = ["E402"]
-"build/*.py" = ["E402"]
+# Blender add-on files may defer heavy imports past module-level statements
+"ai_model_optimizer/*.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"
