@@ -4,13 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.9.0] - 2026-04-21
-
-**Highlight:** Opt-in verbose logging across every pipeline step — see which settings each step consumed, intermediate checkpoints (per-object face counts, material-merge candidates, UV-seam weights, bake cage extrusion, and more), and elapsed time. Designed for diagnosing issues on real inputs and for later informed tuning of defaults.
+## [1.9.1] - 2026-04-21
 
 ### Fixed
 
 - **Saved default settings no longer reset when Blender starts or when a new file is created.** The `load_post` / `load_factory_startup_post` handler that auto-loads `defaults.json` was missing the `@bpy.app.handlers.persistent` decorator, so Blender dropped it from the handler list the first time a file was loaded. The handler now persists across file loads and iterates `bpy.data.scenes` (rather than relying on `bpy.context.scene`, which is unreliable during handler callbacks), so previously-saved presets are restored on every fresh file and on Blender startup.
+
+### Changed
+
+- README Features list now mentions the `Verbose Logging` toggle and `Open Debug Log` button introduced in 1.9.0 (documentation catch-up, no behavior change).
+
+## [1.9.0] - 2026-04-21
+
+**Highlight:** Opt-in verbose logging across every pipeline step — see which settings each step consumed, intermediate checkpoints (per-object face counts, material-merge candidates, UV-seam weights, bake cage extrusion, and more), and elapsed time. Designed for diagnosing issues on real inputs and for later informed tuning of defaults.
 
 ### Added
 
