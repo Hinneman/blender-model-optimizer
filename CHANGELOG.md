@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 **Highlight:** Opt-in verbose logging across every pipeline step — see which settings each step consumed, intermediate checkpoints (per-object face counts, material-merge candidates, UV-seam weights, bake cage extrusion, and more), and elapsed time. Designed for diagnosing issues on real inputs and for later informed tuning of defaults.
 
+### Fixed
+
+- **Saved default settings no longer reset when Blender starts or when a new file is created.** The `load_post` / `load_factory_startup_post` handler that auto-loads `defaults.json` was missing the `@bpy.app.handlers.persistent` decorator, so Blender dropped it from the handler list the first time a file was loaded. The handler now persists across file loads and iterates `bpy.data.scenes` (rather than relying on `bpy.context.scene`, which is unreliable during handler callbacks), so previously-saved presets are restored on every fresh file and on Blender startup.
+
 ### Added
 
 - `Verbose Logging` toggle on the Presets panel, default off. When on, every pipeline step (Fix Geometry, Remove Interior, Remove Small Pieces, Symmetry Mirror, Floor Snap, Decimate, Clean Images, Clean Unused, Resize Textures, LOD Generation, Export GLB) prints a `▶ step — key=value, …` start line listing every property it consumed, one or more `  detail` checkpoint lines from inside the work modules, and a `◀ step — result, Ns` end line with elapsed time. Output goes to Blender's system console (Window → Toggle System Console on Windows, launching terminal on macOS/Linux). Setting is persisted across sessions via the existing save-defaults flow.
