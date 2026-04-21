@@ -40,6 +40,7 @@ from .operators import (
     AIOPT_OT_fix_geometry,
     AIOPT_OT_floor_snap,
     AIOPT_OT_load_defaults,
+    AIOPT_OT_open_debug_log,
     AIOPT_OT_remove_interior,
     AIOPT_OT_remove_small_pieces,
     AIOPT_OT_reset_defaults,
@@ -87,6 +88,7 @@ classes = (
     AIOPT_OT_save_defaults,
     AIOPT_OT_load_defaults,
     AIOPT_OT_reset_defaults,
+    AIOPT_OT_open_debug_log,
     AIOPT_PT_main_panel,
     AIOPT_PT_progress_panel,
     AIOPT_PT_geometry_panel,
@@ -101,12 +103,21 @@ classes = (
 )
 
 
+@bpy.app.handlers.persistent
 def _load_defaults_on_file(dummy):
-    """Auto-load saved defaults when a new file is opened."""
-    if hasattr(bpy.context, "scene") and hasattr(bpy.context.scene, "ai_optimizer"):
-        props = bpy.context.scene.ai_optimizer
-        if load_defaults(props):
-            print("[AI Model Optimizer] Loaded saved defaults")
+    """Auto-load saved defaults when a new file is opened or Blender starts.
+
+    Must be @persistent — without it, Blender clears the handler the first time
+    a .blend file loads, so defaults only load once (or not at all).
+    bpy.context.scene is unreliable inside load_post, so iterate bpy.data.scenes.
+    """
+    loaded_any = False
+    for scene in bpy.data.scenes:
+        props = getattr(scene, "ai_optimizer", None)
+        if props is not None and load_defaults(props):
+            loaded_any = True
+    if loaded_any:
+        print("[AI Model Optimizer] Loaded saved defaults")
 
 
 def register():

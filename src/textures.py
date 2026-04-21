@@ -2,7 +2,7 @@ import math
 
 import bpy
 
-from .utils import get_image_users
+from .utils import get_image_users, log
 
 
 def get_image_fingerprint(img):
@@ -99,6 +99,15 @@ def clean_images_all(context, token=None):
             continue
         fingerprint_groups.setdefault(fp, []).append(img)
 
+    collision_groups = sum(1 for g in fingerprint_groups.values() if len(g) >= 2)
+    log(
+        context,
+        f"  clean_images: {len(images)} images, "
+        f"{len(fingerprint_groups)} unique fingerprints, "
+        f"{collision_groups} group(s) with possible duplicates",
+        level="DEBUG",
+    )
+
     # Phase 2: For groups with matching fingerprints, do full comparison
     for _fp, group in fingerprint_groups.items():
         if len(group) < 2:
@@ -147,6 +156,12 @@ def clean_images_all(context, token=None):
                     if is_a:
                         break
 
+    log(
+        context,
+        f"  clean_images: removed {removed} duplicate image(s)",
+        level="DEBUG",
+    )
+
     return (removed, f"Removed {removed} truly identical image(s)")
 
 
@@ -155,17 +170,33 @@ def clean_unused_all(context):
 
     Returns ``(removed_count, detail_string)``.
     """
-    before = len(bpy.data.images) + len(bpy.data.materials) + len(bpy.data.meshes) + len(bpy.data.textures)
+    before_images = len(bpy.data.images)
+    before_materials = len(bpy.data.materials)
+    before_meshes = len(bpy.data.meshes)
+    before_textures = len(bpy.data.textures)
+    before = before_images + before_materials + before_meshes + before_textures
 
     bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
 
-    after = len(bpy.data.images) + len(bpy.data.materials) + len(bpy.data.meshes) + len(bpy.data.textures)
+    after_images = len(bpy.data.images)
+    after_materials = len(bpy.data.materials)
+    after_meshes = len(bpy.data.meshes)
+    after_textures = len(bpy.data.textures)
+    after = after_images + after_materials + after_meshes + after_textures
 
     removed = before - after
+    log(
+        context,
+        f"  clean_unused: images {before_images}→{after_images}, "
+        f"materials {before_materials}→{after_materials}, "
+        f"meshes {before_meshes}→{after_meshes}, "
+        f"textures {before_textures}→{after_textures}",
+        level="DEBUG",
+    )
     return (removed, f"Removed {removed} unused data block(s)")
 
 
-def resize_texture_single(img, props):
+def resize_texture_single(img, props, context=None):
     """Resize a single image according to *props* settings.
 
     Returns ``True`` if the image was resized.
@@ -193,4 +224,9 @@ def resize_texture_single(img, props):
 
     img.scale(new_w, new_h)
     img.pack()
+    log(
+        context,
+        f"  resize: {img.name} {w}x{h} → {new_w}x{new_h} (mode={props.resize_mode})",
+        level="DEBUG",
+    )
     return True

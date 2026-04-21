@@ -14,7 +14,7 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 - **Remove Interior** — Remove hidden interior geometry (Loose Parts or Ray Cast method)
 - **Remove Small Pieces** — Delete disconnected mesh islands below a face count or size threshold
 - **Symmetry Mirror** *(Experimental)* — Detect near-symmetric meshes and apply mirror optimization
-- **Decimate** — Reduce polygon count using collapse decimation with configurable ratio
+- **Decimate** — Reduce polygon count using collapse decimation with configurable ratio, optional multi-pass refinement, UV-seam protection, and a planar pre-pass that merges flat regions before collapse
 - **Bake Normal Map** — Bake high-poly surface detail into a normal map before decimating (requires Cycles)
 - **Clean Duplicate Images** — Pixel-content-based deduplication (safe for multi-import sessions)
 - **Clean Unused Data** — Remove orphaned materials, textures, and meshes
@@ -31,7 +31,7 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 ## Requirements
 
 - Blender 4.0 or newer
-- Optional: [3D Print Toolbox](https://docs.blender.org/manual/en/latest/addons/mesh/3d_print_toolbox.html) add-on for improved manifold fixes
+- Optional: [3D Print Toolbox](https://docs.blender.org/manual/en/latest/addons/mesh/3d_print_toolbox.html)
 
 ## Installation
 

@@ -1,5 +1,9 @@
 import json
+import math
 import os
+import subprocess
+import sys
+import tempfile
 import time
 
 import bpy
@@ -25,13 +29,30 @@ from .utils import (
     CancelToken,
     PipelineCancelled,
     count_faces,
+    debug_buffer_is_empty,
     export_glb_all,
     generate_lods,
     get_config_path,
+    get_debug_log_text,
     get_selected_meshes,
     load_defaults,
+    log,
     save_defaults,
 )
+
+
+def _format_setting(value):
+    """Pretty-print a property value for the verbose start-line log.
+
+    Trims Blender's 32-bit float noise (e.g. 0.10000000149 → 0.1) while
+    leaving ints, bools, and strings untouched. Called only inside the
+    DEBUG-gated start line, so performance cost is acceptable.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float):
+        return f"{value:g}"
+    return value
 
 
 class AIOPT_OT_fix_geometry(Operator):
@@ -623,6 +644,31 @@ class AIOPT_OT_run_all(Operator):
     def _teardown_noop(self, context):
         return None
 
+    def _step_start(self, context, step_name, settings):
+        """Record step start time and emit the DEBUG start line.
+
+        ``settings`` is a dict of {prop_name: value} consumed by this step.
+        Uses a separate ``_debug_step_start`` attribute so we do not clobber
+        the existing ``_step_start_time`` written by the modal loop.
+        """
+        self._debug_step_start = time.perf_counter()
+        if settings:
+            pairs = ", ".join(f"{k}={_format_setting(v)}" for k, v in settings.items())
+            log(context, f"▶ {step_name} — {pairs}", level="DEBUG")
+        else:
+            log(context, f"▶ {step_name}", level="DEBUG")
+
+    def _step_end(self, context, step_name, result_line):
+        """Emit the DEBUG end line with elapsed time. Returns the original result_line."""
+        elapsed = time.perf_counter() - getattr(self, "_debug_step_start", time.perf_counter())
+        summary = result_line.replace("\n", " | ")
+        log(
+            context,
+            f"◀ {step_name} — {summary}, {elapsed:.2f}s",
+            level="DEBUG",
+        )
+        return result_line
+
     # -- Fix Geometry --
 
     def _setup_fix_geometry(self, context):
@@ -631,6 +677,21 @@ class AIOPT_OT_run_all(Operator):
         self._sub_items = get_selected_meshes()
         self._fix_count = 0
         self._fix_method = "none"
+        props = context.scene.ai_optimizer
+        self._step_start(
+            context,
+            "Fix Geometry",
+            {
+                "merge_distance_mm": props.merge_distance_mm,
+                "recalculate_normals": props.recalculate_normals,
+                "manifold_method": props.manifold_method,
+                "merge_materials": props.merge_materials,
+                "merge_materials_threshold_pct": props.merge_materials_threshold_pct,
+                "join_meshes": props.join_meshes,
+                "join_mode": props.join_mode,
+                "objects": len(self._sub_items),
+            },
+        )
         return len(self._sub_items)
 
     def _tick_fix_geometry(self, context, index):
@@ -664,7 +725,7 @@ class AIOPT_OT_run_all(Operator):
             _result, join_d = join_meshes_by_material(context, meshes, props.join_mode)
             lines.append(join_d)
 
-        return "\n".join(lines)
+        return self._step_end(context, "Fix Geometry", "\n".join(lines))
 
     # -- Remove Interior --
 
@@ -673,6 +734,15 @@ class AIOPT_OT_run_all(Operator):
             bpy.ops.object.mode_set(mode="OBJECT")
         self._sub_items = get_selected_meshes()
         self._interior_removed = 0
+        props = context.scene.ai_optimizer
+        self._step_start(
+            context,
+            "Remove Interior",
+            {
+                "interior_method": props.interior_method,
+                "objects": len(self._sub_items),
+            },
+        )
         return len(self._sub_items)
 
     def _tick_remove_interior(self, context, index):
@@ -683,7 +753,11 @@ class AIOPT_OT_run_all(Operator):
         return obj.name
 
     def _teardown_remove_interior(self, context):
-        return f"Removed {self._interior_removed:,} interior faces"
+        return self._step_end(
+            context,
+            "Remove Interior",
+            f"Removed {self._interior_removed:,} interior faces",
+        )
 
     # -- Remove Small Pieces --
 
@@ -693,6 +767,16 @@ class AIOPT_OT_run_all(Operator):
         self._sub_items = get_selected_meshes()
         self._small_pieces_deleted = 0
         self._small_pieces_faces_removed = 0
+        props = context.scene.ai_optimizer
+        self._step_start(
+            context,
+            "Remove Small Pieces",
+            {
+                "small_pieces_face_threshold": props.small_pieces_face_threshold,
+                "small_pieces_size_threshold_cm": props.small_pieces_size_threshold,
+                "objects": len(self._sub_items),
+            },
+        )
         return len(self._sub_items)
 
     def _tick_remove_small_pieces(self, context, index):
@@ -704,7 +788,11 @@ class AIOPT_OT_run_all(Operator):
         return obj.name
 
     def _teardown_remove_small_pieces(self, context):
-        return f"Removed {self._small_pieces_deleted:,} piece(s), {self._small_pieces_faces_removed:,} faces"
+        return self._step_end(
+            context,
+            "Remove Small Pieces",
+            f"Removed {self._small_pieces_deleted:,} piece(s), {self._small_pieces_faces_removed:,} faces",
+        )
 
     # -- Symmetry Mirror --
 
@@ -714,6 +802,17 @@ class AIOPT_OT_run_all(Operator):
         self._sub_items = get_selected_meshes()
         self._symmetry_applied = 0
         self._symmetry_faces_before = count_faces(self._sub_items)
+        props = context.scene.ai_optimizer
+        self._step_start(
+            context,
+            "Symmetry Mirror",
+            {
+                "axis": props.symmetry_axis,
+                "threshold_mm": props.symmetry_threshold_mm,
+                "min_score": props.symmetry_min_score,
+                "objects": len(self._sub_items),
+            },
+        )
         return len(self._sub_items)
 
     def _tick_symmetry(self, context, index):
@@ -734,7 +833,11 @@ class AIOPT_OT_run_all(Operator):
     def _teardown_symmetry(self, context):
         faces_after = count_faces(get_selected_meshes())
         removed = self._symmetry_faces_before - faces_after
-        return f"Mirrored {self._symmetry_applied} object(s), {removed:,} faces removed"
+        return self._step_end(
+            context,
+            "Symmetry Mirror",
+            f"Mirrored {self._symmetry_applied} object(s), {removed:,} faces removed",
+        )
 
     # -- Floor Snap --
 
@@ -743,17 +846,24 @@ class AIOPT_OT_run_all(Operator):
             bpy.ops.object.mode_set(mode="OBJECT")
         self._floor_snap_meshes = get_selected_meshes()
         self._floor_snap_shift = 0.0
+        self._step_start(
+            context,
+            "Floor Snap",
+            {"objects": len(self._floor_snap_meshes)},
+        )
         # Single tick — operates on the group, not per-object.
         return 1 if self._floor_snap_meshes else 0
 
     def _tick_floor_snap(self, context, index):
-        self._floor_snap_shift = floor_snap_all(self._floor_snap_meshes, token=self._token)
+        self._floor_snap_shift = floor_snap_all(self._floor_snap_meshes, token=self._token, context=context)
         return f"Shifted {self._floor_snap_shift * 1000:.1f} mm"
 
     def _teardown_floor_snap(self, context):
         if self._floor_snap_shift == 0.0:
-            return "Floor snap: no shift needed"
-        return f"Floor snap: shifted {self._floor_snap_shift * 1000:.1f} mm up"
+            detail = "Floor snap: no shift needed"
+        else:
+            detail = f"Floor snap: shifted {self._floor_snap_shift * 1000:.1f} mm up"
+        return self._step_end(context, "Floor Snap", detail)
 
     # -- Decimate --
 
@@ -763,6 +873,23 @@ class AIOPT_OT_run_all(Operator):
         self._sub_items = get_selected_meshes()
         self._faces_before = count_faces(self._sub_items)
         props = context.scene.ai_optimizer
+        self._step_start(
+            context,
+            "Decimate",
+            {
+                "decimate_ratio": props.decimate_ratio,
+                "decimate_passes": props.decimate_passes,
+                "protect_uv_seams": props.protect_uv_seams,
+                "run_planar_prepass": props.run_planar_prepass,
+                "planar_angle_deg": f"{math.degrees(props.planar_angle):.1f}",
+                "bake_normal_map": props.bake_normal_map,
+                "normal_map_resolution": props.normal_map_resolution,
+                "auto_cage_extrusion": props.auto_cage_extrusion,
+                "cage_extrusion_mm": props.cage_extrusion_mm,
+                "faces_before": self._faces_before,
+                "objects": len(self._sub_items),
+            },
+        )
         self._highpoly_copies = {}
         if props.bake_normal_map:
             for obj in self._sub_items:
@@ -800,13 +927,19 @@ class AIOPT_OT_run_all(Operator):
             self._highpoly_copies = {}
             lines.append(f"{baked} normal map(s) baked")
 
-        return "\n".join(lines)
+        return self._step_end(context, "Decimate", "\n".join(lines))
 
     # -- Clean Images --
 
     def _setup_clean_images(self, context):
         self._sub_items = [None]  # single item
         self._clean_detail = ""
+        image_count = sum(
+            1
+            for img in bpy.data.images
+            if img.type == "IMAGE" and img.has_data and img.name not in ("Render Result", "Viewer Node")
+        )
+        self._step_start(context, "Clean Images", {"images": image_count})
         return 1
 
     def _tick_clean_images(self, context, index):
@@ -815,13 +948,23 @@ class AIOPT_OT_run_all(Operator):
         return detail
 
     def _teardown_clean_images(self, context):
-        return self._clean_detail
+        return self._step_end(context, "Clean Images", self._clean_detail)
 
     # -- Clean Unused --
 
     def _setup_clean_unused(self, context):
         self._sub_items = [None]
         self._unused_detail = ""
+        self._step_start(
+            context,
+            "Clean Unused",
+            {
+                "images": len(bpy.data.images),
+                "materials": len(bpy.data.materials),
+                "meshes": len(bpy.data.meshes),
+                "textures": len(bpy.data.textures),
+            },
+        )
         return 1
 
     def _tick_clean_unused(self, context, index):
@@ -830,7 +973,7 @@ class AIOPT_OT_run_all(Operator):
         return detail
 
     def _teardown_clean_unused(self, context):
-        return self._unused_detail
+        return self._step_end(context, "Clean Unused", self._unused_detail)
 
     # -- Resize Textures --
 
@@ -851,23 +994,46 @@ class AIOPT_OT_run_all(Operator):
             if needs_resize:
                 self._sub_items.append(img)
         self._resized_count = 0
+        self._step_start(
+            context,
+            "Resize Textures",
+            {
+                "max_texture_size": props.max_texture_size,
+                "resize_mode": props.resize_mode,
+                "candidates": len(self._sub_items),
+            },
+        )
         return len(self._sub_items)
 
     def _tick_resize_textures(self, context, index):
         props = context.scene.ai_optimizer
         img = self._sub_items[index]
-        if resize_texture_single(img, props):
+        if resize_texture_single(img, props, context=context):
             self._resized_count += 1
         return img.name
 
     def _teardown_resize_textures(self, context):
-        return f"Resized {self._resized_count} texture(s)"
+        return self._step_end(
+            context,
+            "Resize Textures",
+            f"Resized {self._resized_count} texture(s)",
+        )
 
     # -- LOD Generation --
 
     def _setup_lod(self, context):
         self._sub_items = [None]
         self._lod_detail = ""
+        props = context.scene.ai_optimizer
+        self._step_start(
+            context,
+            "LOD Generation",
+            {
+                "lod_levels": props.lod_levels,
+                "lod_ratios": props.lod_ratios,
+                "lod_suffix_pattern": props.lod_suffix_pattern,
+            },
+        )
         return 1
 
     def _tick_lod(self, context, index):
@@ -877,13 +1043,30 @@ class AIOPT_OT_run_all(Operator):
         return detail
 
     def _teardown_lod(self, context):
-        return self._lod_detail
+        return self._step_end(context, "LOD Generation", self._lod_detail)
 
     # -- Export GLB --
 
     def _setup_export(self, context):
         self._sub_items = [None]
         self._export_detail = ""
+        props = context.scene.ai_optimizer
+        self._step_start(
+            context,
+            "Export GLB",
+            {
+                "output_filename": props.output_filename,
+                "output_folder": props.output_folder or "(blend file dir)",
+                "export_selected_only": props.export_selected_only,
+                "use_draco": props.use_draco,
+                "draco_level": props.draco_level,
+                "draco_position_quantization": props.draco_position_quantization,
+                "draco_normal_quantization": props.draco_normal_quantization,
+                "draco_texcoord_quantization": props.draco_texcoord_quantization,
+                "image_format": props.image_format,
+                "image_quality": props.image_quality,
+            },
+        )
         return 1
 
     def _tick_export(self, context, index):
@@ -897,7 +1080,7 @@ class AIOPT_OT_run_all(Operator):
         detail = self._export_detail
         if "(" in detail and ")" in detail:
             state.export_size = detail[detail.rfind("(") + 1 : detail.rfind(")")]
-        return detail
+        return self._step_end(context, "Export GLB", detail)
 
 
 class AIOPT_OT_cancel_pipeline(Operator):
@@ -937,6 +1120,42 @@ class AIOPT_OT_dismiss_pipeline(Operator):
         state.faces_before = 0
         state.faces_after = 0
         state.export_size = ""
+        return {"FINISHED"}
+
+
+class AIOPT_OT_open_debug_log(Operator):
+    bl_idname = "ai_optimizer.open_debug_log"
+    bl_label = "Open Debug Log"
+    bl_description = "Save the current debug log to a temp file and open it in the OS default text editor"
+
+    @classmethod
+    def poll(cls, context):
+        return not debug_buffer_is_empty()
+
+    def execute(self, context):
+        path = os.path.join(tempfile.gettempdir(), "ai_optimizer_debug.log")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(get_debug_log_text())
+        except OSError as exc:
+            self.report({"ERROR"}, f"Could not write debug log: {exc}")
+            return {"CANCELLED"}
+
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except (OSError, FileNotFoundError) as exc:
+            self.report(
+                {"WARNING"},
+                f"Log saved to {path} — open it manually ({exc})",
+            )
+            return {"FINISHED"}
+
+        self.report({"INFO"}, f"Debug log opened: {path}")
         return {"FINISHED"}
 
 

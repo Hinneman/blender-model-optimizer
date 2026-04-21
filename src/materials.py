@@ -1,6 +1,7 @@
 import bpy
 
 from .textures import get_image_fingerprint
+from .utils import log
 
 
 def _get_material_signature(mat, threshold=0.01):
@@ -62,6 +63,11 @@ def merge_duplicate_materials(context, threshold=0.01):
             sig_to_keeper[sig] = mat
 
     detail_string = "; ".join(details) if details else "no duplicates found"
+    log(
+        context,
+        f"  merge_materials: {len(all_mats)} candidates, {merged_count} merged (threshold={threshold:.4f})",
+        level="DEBUG",
+    )
     return merged_count, detail_string
 
 
@@ -75,6 +81,7 @@ def join_meshes_by_material(context, meshes, mode="BY_MATERIAL"):
     Returns ``(resulting_objects, detail_string)``.
     """
     if len(meshes) <= 1:
+        log(context, "  join_meshes: only 1 object, skipping", level="DEBUG")
         return (list(meshes), "Only 1 object, nothing to join")
 
     original_count = len(meshes)
@@ -86,6 +93,11 @@ def join_meshes_by_material(context, meshes, mode="BY_MATERIAL"):
         context.view_layer.objects.active = meshes[0]
         bpy.ops.object.join()
         result = [context.view_layer.objects.active]
+        log(
+            context,
+            f"  join_meshes(ALL): {original_count} → 1",
+            level="DEBUG",
+        )
         return (result, f"Joined {original_count} objects into 1 (all)")
 
     # -- BY_MATERIAL mode --
@@ -110,4 +122,10 @@ def join_meshes_by_material(context, meshes, mode="BY_MATERIAL"):
         result_objects.append(context.view_layer.objects.active)
 
     detail = f"Joined {original_count} objects into {len(result_objects)} (by material)"
+    log(
+        context,
+        f"  join_meshes(BY_MATERIAL): {original_count} objects → "
+        f"{len(groups)} material groups → {len(result_objects)} object(s)",
+        level="DEBUG",
+    )
     return (result_objects, detail)

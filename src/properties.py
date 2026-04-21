@@ -389,6 +389,18 @@ class AIOPT_Properties(PropertyGroup):
         description="Delete loose parts smaller than this cube edge length in centimeters",
     )
 
+    # -- Diagnostics --
+    verbose_logging: BoolProperty(
+        name="Verbose Logging",
+        default=False,
+        description=(
+            "Print detailed per-step settings and checkpoints. Logs appear in "
+            "Blender's system console (Window > Toggle System Console on Windows; "
+            "launching terminal on macOS/Linux) and can be opened with the "
+            "Open Debug Log button below"
+        ),
+    )
+
 
 class AIOPT_PipelineState(PropertyGroup):
     """Runtime state for pipeline progress tracking. Stored on WindowManager."""

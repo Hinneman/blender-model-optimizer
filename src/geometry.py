@@ -1,5 +1,9 @@
+import math
+
 import bpy
 from mathutils import Vector
+
+from .utils import log
 
 
 def _fill_holes_manifold():
@@ -37,21 +41,39 @@ def fix_geometry_single(context, obj, props):
     manifold repair was applied and *method_used* describes which backend was
     used (or ``"none"`` when manifold fixing is disabled).
     """
+    import bmesh
+
     bpy.ops.object.select_all(action="DESELECT")
     context.view_layer.objects.active = obj
     obj.select_set(True)
 
+    counts_before = (
+        len(obj.data.polygons),
+        len(obj.data.edges),
+        len(obj.data.vertices),
+    )
+
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
+
+    def _edit_counts():
+        bm = bmesh.from_edit_mesh(obj.data)
+        return (len(bm.faces), len(bm.edges), len(bm.verts))
+
+    def _fmt(counts):
+        f, e, v = counts
+        return f"f={f:,}/e={e:,}/v={v:,}"
 
     # Pre-pass: collapse zero-area faces and zero-length edges that AI meshes
     # commonly contain. Threshold is intentionally very small — only truly
     # degenerate geometry is affected.
     bpy.ops.mesh.dissolve_degenerate(threshold=1e-6)
+    counts_after_degenerate = _edit_counts()
 
     # Merge close vertices
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.mesh.remove_doubles(threshold=props.merge_distance_mm / 1000.0)
+    counts_after_doubles = _edit_counts()
 
     # Recalculate normals
     if props.recalculate_normals:
@@ -76,12 +98,27 @@ def fix_geometry_single(context, obj, props):
         fixed = _fill_holes_manifold()
         method_used = "manual fill holes"
     # OFF: no-op, method_used stays "none"
+    counts_after_manifold = _edit_counts()
 
     # Delete loose
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.mesh.delete_loose(use_verts=True, use_edges=True, use_faces=False)
 
     bpy.ops.object.mode_set(mode="OBJECT")
+    counts_after = (
+        len(obj.data.polygons),
+        len(obj.data.edges),
+        len(obj.data.vertices),
+    )
+    log(
+        context,
+        f"  {obj.name}: {_fmt(counts_before)} → "
+        f"dissolve_degenerate {_fmt(counts_after_degenerate)} → "
+        f"remove_doubles {_fmt(counts_after_doubles)} → "
+        f"manifold({method_used}) {_fmt(counts_after_manifold)} → "
+        f"delete_loose {_fmt(counts_after)}",
+        level="DEBUG",
+    )
     return (fixed, method_used)
 
 
@@ -139,6 +176,11 @@ def _remove_interior_loose_parts(context, obj, token=None):
 
     # Collect only parts that came from this object (original + newly separated)
     parts = [o for o in context.scene.objects if o.type == "MESH" and (o == obj or o not in existing_meshes)]
+    log(
+        context,
+        f"  {original_name}: separated into {len(parts)} loose part(s) (faces_before={faces_before:,})",
+        level="DEBUG",
+    )
     if len(parts) <= 1:
         # Nothing was separated — single connected mesh
         return 0
@@ -177,6 +219,12 @@ def _remove_interior_loose_parts(context, obj, token=None):
         remaining[0].name = original_name
 
     faces_after = len(context.view_layer.objects.active.data.polygons) if context.view_layer.objects.active else 0
+    log(
+        context,
+        f"  {original_name}: LOOSE_PARTS removed {len(to_delete)} enclosed part(s), "
+        f"{faces_before - faces_after:,} faces",
+        level="DEBUG",
+    )
     return faces_before - faces_after
 
 
@@ -267,6 +315,12 @@ def _remove_interior_raycast(context, obj, token=None):
     obj.data.update()
 
     faces_after = len(obj.data.polygons)
+    log(
+        context,
+        f"  {obj.name}: RAY_CAST flagged {len(interior_faces):,} interior face(s) "
+        f"of {faces_before:,}, removed {faces_before - faces_after:,}",
+        level="DEBUG",
+    )
     return faces_before - faces_after
 
 
@@ -308,12 +362,19 @@ def remove_small_pieces_single(context, obj, props, token=None):
     bpy.ops.object.mode_set(mode="OBJECT")
 
     parts = [o for o in context.scene.objects if o.type == "MESH" and (o == obj or o not in existing_objects)]
+    log(
+        context,
+        f"  {original_name}: {len(parts)} loose part(s), "
+        f"face_threshold={face_threshold}, volume_threshold={volume_threshold:.2e} m^3",
+        level="DEBUG",
+    )
 
     if len(parts) <= 1:
         # Single connected mesh — nothing to separate
         return (0, 0)
 
     to_delete = []
+    part_stats = {}  # part -> (face_count, volume)
     for part in parts:
         if token is not None:
             token.check()
@@ -324,6 +385,8 @@ def remove_small_pieces_single(context, obj, props, token=None):
         volume = abs(bm.calc_volume())
         bm.free()
 
+        part_stats[part] = (face_count, volume)
+
         if face_count < face_threshold or volume < volume_threshold:
             to_delete.append(part)
 
@@ -331,6 +394,18 @@ def remove_small_pieces_single(context, obj, props, token=None):
     if len(to_delete) == len(parts):
         largest = max(parts, key=lambda o: len(o.data.polygons))
         to_delete = [o for o in to_delete if o != largest]
+
+    survivors = [p for p in parts if p not in to_delete]
+    if survivors:
+        survivor_faces = [part_stats[p][0] for p in survivors]
+        survivor_volumes = [part_stats[p][1] for p in survivors]
+        log(
+            context,
+            f"  {original_name}: survivors {len(survivors)}: "
+            f"faces min={min(survivor_faces):,}/max={max(survivor_faces):,}, "
+            f"volume min={min(survivor_volumes):.2e}/max={max(survivor_volumes):.2e} m^3",
+            level="DEBUG",
+        )
 
     bpy.ops.object.select_all(action="DESELECT")
     for obj_del in to_delete:
@@ -349,6 +424,11 @@ def remove_small_pieces_single(context, obj, props, token=None):
         remaining[0].name = original_name
 
     faces_after = len(context.view_layer.objects.active.data.polygons) if context.view_layer.objects.active else 0
+    log(
+        context,
+        f"  {original_name}: deleted {len(to_delete)} part(s), {faces_before - faces_after:,} faces removed",
+        level="DEBUG",
+    )
     return (len(to_delete), faces_before - faces_after)
 
 
@@ -406,6 +486,13 @@ def detect_and_apply_symmetry(context, obj, axis="X", threshold=0.001, min_score
             matched += 1
 
     score = matched / max(len(positive_verts), 1)
+
+    log(
+        context,
+        f"  {obj.name}: axis={axis} score={score:.2%} "
+        f"(matched {matched}/{len(positive_verts)} verts, threshold={threshold * 1000:.2f}mm)",
+        level="DEBUG",
+    )
 
     if score < min_score:
         bm.free()
@@ -476,6 +563,14 @@ def bake_normal_map_for_decimate(context, obj, highpoly, props):
     Returns the baked ``bpy.types.Image`` or *None* on failure.
     """
     resolution = int(props.normal_map_resolution)
+    extrusion_m = _compute_cage_extrusion(obj, props)
+    extrusion_source = "auto" if props.auto_cage_extrusion else "manual"
+    log(
+        context,
+        f"  {obj.name}: bake start, resolution={resolution}, "
+        f"cage_extrusion={extrusion_m * 1000:.2f}mm ({extrusion_source})",
+        level="DEBUG",
+    )
 
     # --- ensure the decimated mesh has a UV map -------------------------
     if not obj.data.uv_layers:
@@ -521,7 +616,7 @@ def bake_normal_map_for_decimate(context, obj, highpoly, props):
         bpy.ops.object.bake(
             type="NORMAL",
             use_selected_to_active=True,
-            cage_extrusion=_compute_cage_extrusion(obj, props),
+            cage_extrusion=extrusion_m,
         )
     except RuntimeError as exc:
         print(f"  [AI Optimizer] Normal map bake failed for '{obj.name}': {exc}")
@@ -549,10 +644,15 @@ def bake_normal_map_for_decimate(context, obj, highpoly, props):
     img.pack()
     context.scene.render.engine = original_engine
 
+    log(
+        context,
+        f"  {obj.name}: bake complete, {resolution}x{resolution} packed",
+        level="DEBUG",
+    )
     return img
 
 
-def _protect_uv_seams(obj):
+def _protect_uv_seams(obj, context=None):
     """Build a vertex-group weight bias to protect UV-island boundaries from DECIMATE.
 
     Creates (or refreshes) a vertex group named ``AIOPT_Seam_Protect`` on
@@ -639,6 +739,13 @@ def _protect_uv_seams(obj):
     if all_other:
         group.add(index=all_other, weight=0.1, type="REPLACE")
 
+    log(
+        context,
+        f"  {obj.name}: seam-protect weights: "
+        f"{len(expanded)} protected verts / {total_verts} total "
+        f"(seam endpoints + one-ring)",
+        level="DEBUG",
+    )
     return "AIOPT_Seam_Protect"
 
 
@@ -680,13 +787,19 @@ def decimate_single(context, obj, props):
     passes = max(1, int(getattr(props, "decimate_passes", 1)))
     start_faces = len(obj.data.polygons)
     target_faces = max(1, int(start_faces * props.decimate_ratio))
+    log(
+        context,
+        f"  {obj.name}: start_faces={start_faces:,}, target={target_faces:,} "
+        f"(ratio={props.decimate_ratio:.3f}), passes={passes}",
+        level="DEBUG",
+    )
 
     # Protect UV seams: build the vertex-group weight bias before triangulation
     # so seam-endpoint vertex indices are stable. Triangulation preserves vertex
     # identity, only adding new edges, so the group stays valid.
     seam_group_name = None
     if getattr(props, "protect_uv_seams", False):
-        seam_group_name = _protect_uv_seams(obj)
+        seam_group_name = _protect_uv_seams(obj, context=context)
 
     # Triangulate up front so every COLLAPSE pass sees one-polygon-one-triangle.
     # Without this, dissolving coplanar n-gons and then re-triangulating inside
@@ -695,6 +808,11 @@ def decimate_single(context, obj, props):
     bpy.ops.mesh.select_all(action="SELECT")
     bpy.ops.mesh.quads_convert_to_tris()
     bpy.ops.object.mode_set(mode="OBJECT")
+    log(
+        context,
+        f"  {obj.name}: triangulated → {len(obj.data.polygons):,} faces",
+        level="DEBUG",
+    )
 
     # Planar pre-pass: merge adjacent near-coplanar faces into n-gons BEFORE
     # COLLAPSE. Un-weighted (DISSOLVE ignores the vertex group), so it eats
@@ -708,6 +826,13 @@ def decimate_single(context, obj, props):
         mod.angle_limit = props.planar_angle
         mod.delimit = {"UV"}
         bpy.ops.object.modifier_apply(modifier=mod.name)
+        log(
+            context,
+            f"  {obj.name}: planar pre-pass at "
+            f"{math.degrees(props.planar_angle):.1f}° → "
+            f"{len(obj.data.polygons):,} faces",
+            level="DEBUG",
+        )
 
     # Compute per-pass ratio AFTER the planar pre-pass. The planar pre-pass
     # has already changed the face count COLLAPSE sees, so anchoring
@@ -728,6 +853,12 @@ def decimate_single(context, obj, props):
             mod.invert_vertex_group = True
         bpy.ops.object.modifier_apply(modifier=mod.name)
 
+    log(
+        context,
+        f"  {obj.name}: COLLAPSE per_pass_ratio={per_pass_ratio:.4f} x {passes} → {len(obj.data.polygons):,} faces",
+        level="DEBUG",
+    )
+
     # Remove the seam-protect vertex group: its purpose ends with decimation
     # and we don't want diagnostic groups leaking into the exported GLB.
     if seam_group_name:
@@ -745,7 +876,7 @@ def decimate_single(context, obj, props):
     bpy.ops.object.mode_set(mode="OBJECT")
 
 
-def floor_snap_all(meshes, token=None):
+def floor_snap_all(meshes, token=None, context=None):
     """Translate all meshes so the group's lowest world-space vertex sits at Z=0.
 
     Computes the minimum world-Z across every vertex of every mesh, then
@@ -777,5 +908,11 @@ def floor_snap_all(meshes, token=None):
 
     for obj in meshes:
         obj.location.z += shift
+
+    log(
+        context,
+        f"  floor_snap: min_z={min_z * 1000:.2f}mm, shift={shift * 1000:.2f}mm, objects={len(meshes)}",
+        level="DEBUG",
+    )
 
     return shift
