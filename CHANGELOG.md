@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0] - 2026-04-21
+
+**Highlight:** Packaged as a Blender extension for [extensions.blender.org](https://extensions.blender.org). Install via `Edit → Preferences → Get Extensions` on Blender 4.2+, or sideload the `.zip` from GitHub releases.
+
+### Changed
+
+- Distribution switched from a concatenated single-file `.py` to an extension-format `.zip` (`ai_model_optimizer-<version>.zip`). The extension ships with a `blender_manifest.toml` and installs as a proper Python package named `ai_model_optimizer`. Extension-format installs are discoverable in Blender's `Get Extensions` dialog (Blender 4.2+) and no longer require the user to manually download and install a `.py` file.
+- Minimum Blender version raised from 4.0 to **4.2**. The 4.2 release is where Blender introduced the extensions system and `blender_manifest.toml` — earlier versions cannot parse the manifest. Users on Blender 4.0/4.1 can keep v1.9.1 installed; there is no backport.
+- Repo layout renamed `src/` to `ai_model_optimizer/` so the on-disk structure mirrors the installed extension.
+- `build.py` rewritten from ~300 lines of source concatenation to ~80 lines of stdlib ZIP packaging. Output path is now `build/ai_model_optimizer-<version>.zip` instead of `build/model-optimizer-addon.py`.
+- GitHub release workflow now attaches the extension ZIP to the release instead of the single-file `.py`.
+
+### Removed
+
+- Legacy single-file `.py` distribution. The concatenation logic in `build.py` is gone; there is no replacement because the extension ZIP is the supported distribution on 4.2+.
+- `bl_info` dict in `__init__.py`. Metadata lives in `blender_manifest.toml`. Blender 4.2+ reads the manifest and ignores `bl_info`, so keeping both would be redundant clutter.
+- Installation instructions docstring at the top of `__init__.py` (documented the legacy install flow that no longer applies).
+
 ## [1.9.1] - 2026-04-21
 
 ### Fixed

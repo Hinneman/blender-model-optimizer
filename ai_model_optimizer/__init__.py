@@ -1,32 +1,3 @@
-"""
-=============================================================
-  AI 3D Model Optimizer — Blender Add-on
-=============================================================
-  HOW TO INSTALL:
-    1. Open Blender
-    2. Go to Edit → Preferences → Add-ons
-    3. Click "Install from Disk" (Blender 4.2+) or "Install..." (older)
-    4. Select this .py file
-    5. Enable the add-on by checking the box next to it
-
-  HOW TO USE:
-    1. Open the sidebar in the 3D Viewport by pressing N
-    2. Click the "AI Optimizer" tab
-    3. Adjust settings
-    4. Click buttons to run individual steps or the full pipeline
-=============================================================
-"""
-
-bl_info = {
-    "name": "AI 3D Model Optimizer",
-    "author": "René Voigt, Claude",
-    "version": (0, 0, 0),  # Placeholder — build.py injects from pyproject.toml
-    "blender": (4, 0, 0),
-    "location": "View3D > Sidebar > AI Optimizer",
-    "description": "Optimize AI-generated 3D models: fix geometry, decimate, clean textures, export compressed GLB",
-    "category": "Mesh",
-}
-
 import bpy
 
 from .operators import (

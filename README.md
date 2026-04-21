@@ -1,7 +1,7 @@
 # AI 3D Model Optimizer — Blender Add-on
 
 [![Latest Release](https://img.shields.io/github/v/release/Hinneman/blender-model-optimizer)](https://github.com/Hinneman/blender-model-optimizer/releases/latest)
-[![Blender](https://img.shields.io/badge/Blender-4.0%2B-orange?logo=blender&logoColor=white)](https://www.blender.org/)
+[![Blender](https://img.shields.io/badge/Blender-4.2%2B-orange?logo=blender&logoColor=white)](https://www.blender.org/)
 [![License](https://img.shields.io/github/license/Hinneman/blender-model-optimizer)](LICENSE)
 
 A Blender add-on that optimizes AI-generated 3D models for web and real-time use. Fixes geometry issues, reduces polygon count, cleans up textures, and exports compressed GLB files.
@@ -31,17 +31,22 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 
 ## Requirements
 
-- Blender 4.0 or newer
+- Blender 4.2 or newer
 - Optional: [3D Print Toolbox](https://docs.blender.org/manual/en/latest/addons/mesh/3d_print_toolbox.html)
 
 ## Installation
 
-1. Download `model-optimizer-addon.py` from the [latest release](https://github.com/Hinneman/blender-model-optimizer/releases/latest)
-2. Open Blender
-3. Go to **Edit → Preferences → Add-ons**
-4. Click **Install from Disk** (Blender 4.2+) or **Install...** (older versions)
-5. Select the downloaded `.py` file
-6. Enable the add-on by checking the box next to "AI 3D Model Optimizer"
+**Preferred (Blender 4.2+):**
+
+1. In Blender, go to **Edit → Preferences → Get Extensions**
+2. Search for **AI 3D Model Optimizer**
+3. Click **Install**
+
+**Sideload (from GitHub release):**
+
+1. Download `ai_model_optimizer-X.Y.Z.zip` from the [latest release](https://github.com/Hinneman/blender-model-optimizer/releases/latest)
+2. Drag-and-drop the `.zip` into Blender, **or** go to **Edit → Preferences → Add-ons → Install from Disk** and select the file
+3. Enable the add-on by checking the box next to "AI 3D Model Optimizer"
 
 ## Usage
 
