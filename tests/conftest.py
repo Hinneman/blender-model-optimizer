@@ -28,7 +28,8 @@ _src_pkg.__path__ = [str(ROOT / "blender_model_optimizer")]
 sys.modules["blender_model_optimizer"] = _src_pkg
 
 # Load blender_model_optimizer/utils.py as blender_model_optimizer.utils.
-_spec = importlib.util.spec_from_file_location("blender_model_optimizer.utils", ROOT / "blender_model_optimizer" / "utils.py")
+_utils_path = ROOT / "blender_model_optimizer" / "utils.py"
+_spec = importlib.util.spec_from_file_location("blender_model_optimizer.utils", _utils_path)
 assert _spec is not None and _spec.loader is not None
 _utils = importlib.util.module_from_spec(_spec)
 sys.modules["blender_model_optimizer.utils"] = _utils
