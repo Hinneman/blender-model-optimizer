@@ -128,7 +128,114 @@ def _tag_3d_redraw(self, context):
             area.tag_redraw()
 
 
-def estimate_glb_size(meshes, props):
+_KNOWN_EXPORT_EXTENSIONS = {".glb", ".fbx", ".obj"}
+_FORMAT_EXTENSIONS = {"GLB": ".glb", "FBX": ".fbx", "OBJ": ".obj"}
+
+
+def swap_export_extension(filename: str, fmt: str) -> str:
+    """Replace a known export extension on ``filename`` with the one for ``fmt``.
+
+    If ``filename`` ends with .glb / .fbx / .obj (case-insensitive), the
+    suffix is stripped before the new extension is appended. Otherwise the
+    new extension is just appended — this preserves user-typed names like
+    ``model.unknown`` without silently mangling them.
+    """
+    new_ext = _FORMAT_EXTENSIONS[fmt]
+    base, dot, ext = filename.rpartition(".")
+    if dot and ("." + ext.lower()) in _KNOWN_EXPORT_EXTENSIONS:
+        return base + new_ext
+    return filename + new_ext
+
+
+def _export_format_update(self, context):
+    """EnumProperty update callback: swap the output filename's extension."""
+    self.output_filename = swap_export_extension(self.output_filename, self.export_format)
+    _tag_3d_redraw(self, context)
+
+
+def estimate_export_size(meshes, props):
+    """Estimate the export file size in bytes for the active export format.
+
+    Returns a rough estimate — accurate to within ~10% for GLB on calibrated
+    inputs and rougher (~30%) for FBX/OBJ. The number is used in the sidebar
+    "Est. Export Size" label, not for any export-time decision.
+    """
+    fmt = props.export_format
+    if fmt == "GLB":
+        return _estimate_glb(meshes, props)
+    if fmt == "FBX":
+        return _estimate_fbx(meshes, props)
+    if fmt == "OBJ":
+        return _estimate_obj(meshes, props)
+    return _estimate_glb(meshes, props)  # defensive fallback
+
+
+def _estimate_fbx(meshes, props):
+    """Estimate FBX binary size: uncompressed mesh data + optional embedded textures."""
+    overhead = 2 * 1024
+
+    geo_bytes = 0
+    for obj in meshes:
+        mesh = obj.data
+        verts = len(mesh.vertices)
+        faces = len(mesh.polygons)
+        geo_bytes += verts * 32 + faces * 12
+
+    if props.run_decimate:
+        geo_bytes *= props.decimate_ratio
+    if props.run_symmetry:
+        geo_bytes *= 0.6
+
+    geo_bytes *= 1.25  # FBX binary overhead
+
+    tex_bytes = 0
+    if props.fbx_embed_textures:
+        images = [
+            i
+            for i in bpy.data.images
+            if i.type == "IMAGE" and i.name not in ("Render Result", "Viewer Node") and get_image_users(i) > 0
+        ]
+        for img in images:
+            w, h = img.size[0], img.size[1]
+            if w == 0 or h == 0:
+                continue
+            if props.run_resize_textures:
+                max_s = props.max_texture_size
+                if props.resize_mode == "ALL":
+                    w, h = max_s, max_s
+                elif w > max_s or h > max_s:
+                    scale = max_s / max(w, h)
+                    w = max(1, 2 ** round(math.log2(max(1, int(w * scale)))))
+                    h = max(1, 2 ** round(math.log2(max(1, int(h * scale)))))
+            tex_bytes += w * h * 4 * 0.3
+
+        if props.bake_normal_map:
+            nmap_res = int(props.normal_map_resolution)
+            tex_bytes += nmap_res * nmap_res * 3 * 0.3
+
+    return geo_bytes + tex_bytes + overhead
+
+
+def _estimate_obj(meshes, props):
+    """Estimate OBJ ASCII size. Textures are never embedded in OBJ."""
+    overhead = 1 * 1024
+
+    geo_bytes = 0
+    for obj in meshes:
+        mesh = obj.data
+        verts = len(mesh.vertices)
+        faces = len(mesh.polygons)
+        geo_bytes += verts * (32 + 32 + 22) + faces * 22
+
+    if props.run_decimate:
+        geo_bytes *= props.decimate_ratio
+    if props.run_symmetry:
+        geo_bytes *= 0.6
+
+    return geo_bytes + overhead
+
+
+def _estimate_glb(meshes, props):
     """Estimate GLB export file size in bytes based on scene data and settings."""
     # -- Geometry --
     geo_bytes = 0
@@ -248,6 +355,7 @@ SAVEABLE_PROPS = [
     "output_filename",
     "output_folder",
     "export_selected_only",
+    "export_format",
     "use_draco",
     "draco_level",
     "draco_position_quantization",
@@ -255,6 +363,12 @@ SAVEABLE_PROPS = [
     "draco_texcoord_quantization",
     "image_format",
     "image_quality",
+    "fbx_axis_preset",
+    "fbx_embed_textures",
+    "fbx_smoothing",
+    "obj_export_materials",
+    "obj_forward_axis",
+    "obj_up_axis",
     "run_lod",
     "lod_levels",
     "lod_suffix_pattern",
@@ -336,18 +450,44 @@ def load_defaults(props):
         return False
 
 
-def export_glb_all(context, props):
-    """Export the scene as a compressed GLB. Returns a detail string."""
-    # Determine output path
+def _resolve_output_dir(props):
+    """Return the absolute output directory for the export step.
+
+    Falls back through: explicit folder → blend file dir → user home.
+    """
     if props.output_folder:
-        output_dir = props.output_folder
-    elif bpy.data.filepath:
-        output_dir = os.path.dirname(bpy.data.filepath)
-    else:
-        output_dir = os.path.expanduser("~")
+        return props.output_folder
+    if bpy.data.filepath:
+        return os.path.dirname(bpy.data.filepath)
+    return os.path.expanduser("~")
 
-    output_path = os.path.join(output_dir, props.output_filename)
 
+def _resolve_output_path(props):
+    """Return the absolute output path for a single export.
+
+    Forces the filename's extension to match ``props.export_format`` so a
+    user who typed ``model.glb`` and then switched the format dropdown to
+    FBX still ends up with ``model.fbx`` written to disk.
+    """
+    out_dir = _resolve_output_dir(props)
+    filename = swap_export_extension(props.output_filename, props.export_format)
+    return os.path.join(out_dir, filename)
+
+
+def export_model(context, props):
+    """Dispatch to the right exporter based on ``props.export_format``."""
+    output_path = _resolve_output_path(props)
+    if props.export_format == "GLB":
+        return _export_glb(context, props, output_path)
+    if props.export_format == "FBX":
+        return _export_fbx(context, props, output_path)
+    if props.export_format == "OBJ":
+        return _export_obj(context, props, output_path)
+    return _export_glb(context, props, output_path)
+
+
+def _export_glb(context, props, output_path):
+    """Export the scene as a compressed GLB. Returns a detail string."""
     log(
         context,
         f"  export: path={output_path}, blender_image_format="
@@ -401,6 +541,79 @@ def export_glb_all(context, props):
     return "Export may have failed — file not found"
 
 
+_FBX_AXIS_PRESETS = {
+    # (axis_forward, axis_up, global_scale, bake_space_transform)
+    "UNREAL": ("X", "Z", 1.0, True),
+    "UNITY": ("-Z", "Y", 1.0, False),
+    "DEFAULT": ("-Z", "Y", 1.0, False),
+}
+
+
+def _export_fbx(context, props, output_path):
+    """Export the scene as a binary FBX. Returns a detail string."""
+    axis_forward, axis_up, global_scale, bake_space = _FBX_AXIS_PRESETS[props.fbx_axis_preset]
+    log(
+        context,
+        f"  export: path={output_path}, axis=({axis_forward},{axis_up}), "
+        f"scale={global_scale}, bake_space={bake_space}, embed={props.fbx_embed_textures}, "
+        f"smooth={props.fbx_smoothing}",
+        level="DEBUG",
+    )
+
+    bpy.ops.export_scene.fbx(
+        filepath=output_path,
+        use_selection=props.export_selected_only,
+        use_mesh_modifiers=True,
+        path_mode="COPY" if props.fbx_embed_textures else "AUTO",
+        embed_textures=props.fbx_embed_textures,
+        mesh_smooth_type=props.fbx_smoothing,
+        axis_forward=axis_forward,
+        axis_up=axis_up,
+        global_scale=global_scale,
+        bake_space_transform=bake_space,
+        object_types={"MESH", "EMPTY"},
+        add_leaf_bones=False,
+        bake_anim=False,
+    )
+
+    if os.path.exists(output_path):
+        size_mb = os.path.getsize(output_path) / (1024 * 1024)
+        log(context, f"  export: wrote {size_mb:.2f} MB to {output_path}", level="DEBUG")
+        return f"Exported: {output_path} ({size_mb:.2f} MB)"
+    log(context, f"  export: file not found at {output_path}", level="DEBUG")
+    return "Export may have failed — file not found"
+
+
+def _export_obj(context, props, output_path):
+    """Export the scene as Wavefront OBJ. Returns a detail string."""
+    log(
+        context,
+        f"  export: path={output_path}, materials={props.obj_export_materials}, "
+        f"axis=(forward={props.obj_forward_axis}, up={props.obj_up_axis})",
+        level="DEBUG",
+    )
+
+    bpy.ops.wm.obj_export(
+        filepath=output_path,
+        export_selected_objects=props.export_selected_only,
+        apply_modifiers=True,
+        export_materials=props.obj_export_materials,
+        export_uv=True,
+        export_normals=True,
+        export_colors=True,
+        export_triangulated_mesh=False,
+        forward_axis=props.obj_forward_axis,
+        up_axis=props.obj_up_axis,
+    )
+
+    if os.path.exists(output_path):
+        size_mb = os.path.getsize(output_path) / (1024 * 1024)
+        log(context, f"  export: wrote {size_mb:.2f} MB to {output_path}", level="DEBUG")
+        return f"Exported: {output_path} ({size_mb:.2f} MB)"
+    log(context, f"  export: file not found at {output_path}", level="DEBUG")
+    return "Export may have failed — file not found"
+
+
 def generate_lods(context, props):
     """Generate multiple LOD levels as separate GLB files.
 
@@ -420,25 +633,23 @@ def generate_lods(context, props):
         return "LOD generation failed: need at least 2 ratios (LOD0 + one extra)"
 
     # ------------------------------------------------------------------
-    # 2. Output directory (same logic as export_glb_all)
+    # 2. Output directory (same logic as _export_glb)
     # ------------------------------------------------------------------
-    if props.output_folder:
-        output_dir = props.output_folder
-    elif bpy.data.filepath:
-        output_dir = os.path.dirname(bpy.data.filepath)
-    else:
-        output_dir = os.path.expanduser("~")
+    output_dir = _resolve_output_dir(props)
 
     # ------------------------------------------------------------------
     # 3. Base name
     # ------------------------------------------------------------------
     base_name = os.path.splitext(props.output_filename)[0]
+    extension = _FORMAT_EXTENSIONS[props.export_format]
 
     # ------------------------------------------------------------------
     # 4. Generate each LOD beyond LOD0
     # ------------------------------------------------------------------
     exported = []
     meshes = get_selected_meshes()
+    if not meshes:
+        return "LOD generation: no meshes selected"
 
     for i, ratio in enumerate(ratios):
         if i == 0:
@@ -461,7 +672,7 @@ def generate_lods(context, props):
             mod.use_collapse_triangulate = True
 
         # Build filename using the suffix pattern
-        filename = f"{base_name}{suffix}.glb"
+        filename = f"{base_name}{suffix}{extension}"
         output_path = os.path.join(output_dir, filename)
 
         # Select meshes for export
@@ -471,36 +682,13 @@ def generate_lods(context, props):
         if meshes:
             context.view_layer.objects.active = meshes[0]
 
-        # Export — export_apply=True applies modifiers non-destructively during export
-        blender_image_format = "AUTO" if props.image_format == "NONE" else props.image_format
-
-        export_settings = {
-            "filepath": output_path,
-            "export_format": "GLB",
-            "use_selection": True,
-            "export_apply": True,
-            "export_yup": True,
-            "export_draco_mesh_compression_enable": props.use_draco,
-            "export_draco_mesh_compression_level": props.draco_level,
-            "export_draco_position_quantization": props.draco_position_quantization,
-            "export_draco_normal_quantization": props.draco_normal_quantization,
-            "export_draco_texcoord_quantization": props.draco_texcoord_quantization,
-            "export_draco_color_quantization": 10,
-            "export_image_format": blender_image_format,
-        }
-
-        if props.image_format in ("JPEG", "WEBP"):
-            export_settings["export_image_quality"] = props.image_quality
-
-        try:
-            bpy.ops.export_scene.gltf(**export_settings)
-        except TypeError:
-            bpy.ops.export_scene.gltf(
-                filepath=output_path,
-                export_format="GLB",
-                export_apply=True,
-                export_draco_mesh_compression_enable=props.use_draco,
-            )
+        # Export this LOD using the active format's exporter
+        if props.export_format == "GLB":
+            _export_glb(context, props, output_path)
+        elif props.export_format == "FBX":
+            _export_fbx(context, props, output_path)
+        elif props.export_format == "OBJ":
+            _export_obj(context, props, output_path)
 
         # Record result
         if os.path.exists(output_path):

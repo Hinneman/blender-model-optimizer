@@ -6,7 +6,7 @@ from bpy.types import Panel
 
 from .utils import (
     count_faces,
-    estimate_glb_size,
+    estimate_export_size,
     get_config_path,
     get_selected_meshes,
     is_print3d_available,
@@ -50,7 +50,7 @@ class AIOPT_PT_main_panel(Panel):
             col.label(text=f"Images: {total_images}")
             col.label(text=f"Materials: {total_materials}")
 
-            est_bytes = estimate_glb_size(meshes, props)
+            est_bytes = estimate_export_size(meshes, props)
             if est_bytes >= 1024 * 1024:
                 est_label = f"~{est_bytes / (1024 * 1024):.1f} MB"
             else:
@@ -560,30 +560,49 @@ class AIOPT_PT_export_panel(Panel):
         props = context.scene.ai_optimizer
 
         col = layout.column(align=True)
+        col.label(text="Format:")
+        col.prop(props, "export_format", text="")
+
+        col.separator()
         col.prop(props, "output_filename")
         col.prop(props, "output_folder")
         col.prop(props, "export_selected_only")
 
         layout.separator()
 
-        col = layout.column(align=True)
-        col.label(text="Compression:", icon="PACKAGE")
-        col.prop(props, "use_draco")
-        if props.use_draco:
-            col.prop(props, "draco_level", slider=True)
-            col.separator()
-            col.label(text="Quantization (advanced):")
-            col.prop(props, "draco_position_quantization", slider=True)
-            col.prop(props, "draco_normal_quantization", slider=True)
-            col.prop(props, "draco_texcoord_quantization", slider=True)
+        if props.export_format == "GLB":
+            col = layout.column(align=True)
+            col.label(text="Compression:", icon="PACKAGE")
+            col.prop(props, "use_draco")
+            if props.use_draco:
+                col.prop(props, "draco_level", slider=True)
+                col.separator()
+                col.label(text="Quantization (advanced):")
+                col.prop(props, "draco_position_quantization", slider=True)
+                col.prop(props, "draco_normal_quantization", slider=True)
+                col.prop(props, "draco_texcoord_quantization", slider=True)
 
-        layout.separator()
+            layout.separator()
 
-        col = layout.column(align=True)
-        col.label(text="Image Format:", icon="IMAGE_DATA")
-        col.prop(props, "image_format", text="")
-        if props.image_format in ("JPEG", "WEBP"):
-            col.prop(props, "image_quality", slider=True)
+            col = layout.column(align=True)
+            col.label(text="Image Format:", icon="IMAGE_DATA")
+            col.prop(props, "image_format", text="")
+            if props.image_format in ("JPEG", "WEBP"):
+                col.prop(props, "image_quality", slider=True)
+
+        elif props.export_format == "FBX":
+            col = layout.column(align=True)
+            col.label(text="FBX Settings:", icon="EXPORT")
+            col.prop(props, "fbx_axis_preset")
+            col.prop(props, "fbx_embed_textures")
+            col.prop(props, "fbx_smoothing")
+
+        elif props.export_format == "OBJ":
+            col = layout.column(align=True)
+            col.label(text="OBJ Settings:", icon="EXPORT")
+            col.prop(props, "obj_export_materials")
+            col.prop(props, "obj_forward_axis")
+            col.prop(props, "obj_up_axis")
 
         layout.separator()
         col = layout.column(align=True)

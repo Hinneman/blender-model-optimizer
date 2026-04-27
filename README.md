@@ -4,7 +4,7 @@
 [![Blender](https://img.shields.io/badge/Blender-4.2%2B-orange?logo=blender&logoColor=white)](https://www.blender.org/)
 [![License](https://img.shields.io/github/license/Hinneman/blender-model-optimizer)](LICENSE)
 
-A Blender add-on that optimizes AI-generated 3D models for web and real-time use. Fixes geometry issues, reduces polygon count, cleans up textures, and exports compressed GLB files.
+A Blender add-on that optimizes AI-generated 3D models for web, game-engine, and real-time use. Fixes geometry issues, reduces polygon count, cleans up textures, and exports to GLB, FBX, or OBJ.
 
 ## Features
 
@@ -19,8 +19,8 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 - **Clean Duplicate Images** — Pixel-content-based deduplication (safe for multi-import sessions)
 - **Clean Unused Data** — Remove orphaned materials, textures, and meshes
 - **Resize Textures** — Downsize or resize all textures to a maximum resolution
-- **Export GLB** — Export with Draco mesh compression and configurable image format (WebP/JPEG/PNG)
-- **LOD Generation** — Export multiple LOD levels as separate GLB files with configurable ratios
+- **Export to GLB / FBX / OBJ** — Pick the format from a single dropdown. GLB has Draco mesh compression and configurable image format (WebP/JPEG/PNG); FBX has axis presets for Unreal Engine and Unity; OBJ writes a companion `.mtl` for materials
+- **LOD Generation** — Export multiple LOD levels as separate files in the chosen format, with configurable ratios
 - **Mesh Analysis** — Analyze mesh problems and get optimization recommendations for decimate ratio and merge distance
 - **Full Pipeline** — Run all enabled steps in one click with toggleable stages
 - **Pipeline Progress** — Live progress panel showing per-step status, sub-step progress, timing, and overall completion
@@ -126,9 +126,11 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 
 | Setting | Default | Description |
 |---|---|---|
+| Format | GLB | Output format: `GLB` (web/real-time, default), `FBX` (game engines), or `OBJ` (DCC interchange). Filename auto-swaps its extension when the format changes |
 | Output Folder | ~/Downloads | Output folder |
-| Filename | optimized_model.glb | Output filename |
+| Filename | optimized_model.glb | Output filename (extension follows the Format choice) |
 | Selected Only | On | Export only selected objects |
+| **GLB-only** | | |
 | Draco Compression | On | Enable Draco mesh compression (recommended for web) |
 | Draco Level | 6 | Compression level (0-10, higher = smaller file) |
 | Position Bits | 14 | Draco position quantization bits (lower = smaller, less precision) |
@@ -136,7 +138,16 @@ A Blender add-on that optimizes AI-generated 3D models for web and real-time use
 | UV Bits | 12 | Draco UV quantization bits |
 | Image Format | WebP | Texture format in exported GLB (WebP / JPEG / PNG) |
 | Image Quality | 85 | JPEG/WebP quality (1-100) |
-| LOD Generation | Off | Generate multiple LOD levels as separate GLB files |
+| **FBX-only** | | |
+| Axis Preset | Unreal Engine | Pre-configured axis and scale settings for the target engine: `Unreal Engine` (1 unit = 1 cm), `Unity` (1 unit = 1 m), or `Blender Default` |
+| Embed Textures | On | Pack textures into the `.fbx` so the file is portable; off references them externally |
+| Smoothing | Face | Smoothing groups written to the FBX (`Off` / `Face` / `Edge`) |
+| **OBJ-only** | | |
+| Export Materials | On | Write a companion `.mtl` file referencing the materials |
+| Forward Axis | -Z | Forward axis written to the OBJ |
+| Up Axis | Y | Up axis written to the OBJ |
+| **LOD** | | |
+| LOD Generation | Off | Generate multiple LOD levels as separate files in the chosen format |
 | LOD Levels | 3 | Number of LOD levels (including full-detail LOD0) |
 | LOD Suffix Pattern | _LOD{n} | Filename suffix pattern ({n} = LOD level number) |
 | LOD Ratios | 1.0, 0.5, 0.25 | Comma-separated decimate ratios per LOD level |

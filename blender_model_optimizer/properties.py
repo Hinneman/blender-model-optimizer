@@ -9,7 +9,7 @@ from bpy.props import (
 )
 from bpy.types import PropertyGroup
 
-from .utils import _tag_3d_redraw
+from .utils import _export_format_update, _tag_3d_redraw
 
 
 class AIOPT_Properties(PropertyGroup):
@@ -28,7 +28,7 @@ class AIOPT_Properties(PropertyGroup):
     run_resize_textures: BoolProperty(
         name="Resize Textures", default=True, description="Resize textures to max size", update=_tag_3d_redraw
     )
-    run_export: BoolProperty(name="Export GLB", default=True, description="Export optimized GLB")
+    run_export: BoolProperty(name="Export Model", default=True, description="Export the optimized model")
 
     # -- Geometry settings --
     merge_distance_mm: FloatProperty(
@@ -257,6 +257,17 @@ class AIOPT_Properties(PropertyGroup):
     )
 
     # -- Export settings --
+    export_format: EnumProperty(
+        name="Format",
+        items=[
+            ("GLB", "GLB", "glTF binary — best for web and real-time"),
+            ("FBX", "FBX", "Autodesk FBX — best for game engines (Unreal, Unity)"),
+            ("OBJ", "OBJ", "Wavefront OBJ — DCC interchange (no animations, basic materials)"),
+        ],
+        default="GLB",
+        description="Export file format",
+        update=_export_format_update,
+    )
     output_filename: StringProperty(name="Filename", default="optimized_model.glb", description="Output filename")
     output_folder: StringProperty(
         name="Folder",
@@ -321,6 +332,84 @@ class AIOPT_Properties(PropertyGroup):
         max=100,
         description="Image quality for JPEG/WebP (80-90 recommended)",
         update=_tag_3d_redraw,
+    )
+
+    # -- FBX-specific --
+    fbx_axis_preset: EnumProperty(
+        name="Axis Preset",
+        items=[
+            (
+                "UNREAL",
+                "Unreal Engine",
+                "FBX axes set so the model imports into Unreal Engine with correct orientation and 1 unit = 1 cm",
+            ),
+            (
+                "UNITY",
+                "Unity",
+                "FBX axes set so the model imports into Unity with correct orientation and 1 unit = 1 m",
+            ),
+            (
+                "DEFAULT",
+                "Blender Default",
+                "Blender's FBX exporter defaults. Use if you know the receiving tool's axis convention "
+                "and want to match it manually",
+            ),
+        ],
+        default="UNREAL",
+        description="Pre-configured axis and scale settings for common target engines",
+    )
+    fbx_embed_textures: BoolProperty(
+        name="Embed Textures",
+        default=True,
+        description=(
+            "Pack textures into the FBX so it can be moved to another machine without losing material maps. "
+            "Increases file size"
+        ),
+        # update redraws the size estimate when an FBX-aware estimator is added (see Task 6 of the plan)
+        update=_tag_3d_redraw,
+    )
+    fbx_smoothing: EnumProperty(
+        name="Smoothing",
+        items=[
+            ("OFF", "Off", "No smoothing groups"),
+            ("FACE", "Face", "Per-face smoothing groups (recommended)"),
+            ("EDGE", "Edge", "Per-edge smoothing"),
+        ],
+        default="FACE",
+        description="Smoothing data written to the FBX",
+    )
+
+    # -- OBJ-specific --
+    obj_export_materials: BoolProperty(
+        name="Export Materials",
+        default=True,
+        description="Write a companion .mtl file referencing the materials",
+    )
+    obj_forward_axis: EnumProperty(
+        name="Forward",
+        items=[
+            ("X", "X", ""),
+            ("Y", "Y", ""),
+            ("Z", "Z", ""),
+            ("NEGATIVE_X", "-X", ""),
+            ("NEGATIVE_Y", "-Y", ""),
+            ("NEGATIVE_Z", "-Z", ""),
+        ],
+        default="NEGATIVE_Z",
+        description="Forward axis written to the OBJ",
+    )
+    obj_up_axis: EnumProperty(
+        name="Up",
+        items=[
+            ("X", "X", ""),
+            ("Y", "Y", ""),
+            ("Z", "Z", ""),
+            ("NEGATIVE_X", "-X", ""),
+            ("NEGATIVE_Y", "-Y", ""),
+            ("NEGATIVE_Z", "-Z", ""),
+        ],
+        default="Y",
+        description="Up axis written to the OBJ",
     )
 
     # -- LOD settings --

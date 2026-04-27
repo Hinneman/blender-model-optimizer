@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.0] - 2026-04-25
+
+**Highlight:** Export to FBX and OBJ in addition to GLB. Pick the format from a single dropdown on the Export panel; settings, LOD output, and the size estimate adapt automatically.
+
+### Added
+
+- **Format dropdown on the Export panel** — choose `GLB`, `FBX`, or `OBJ` for the export step. Filename auto-swaps its extension when the format changes (e.g. `model.glb` → `model.fbx`).
+- **FBX export.** Writes a binary `.fbx` via Blender's bundled FBX exporter. New settings:
+  - `Axis Preset` — `Unreal Engine` (X-forward, Z-up, scale 1.0, bake-space-transform on; default), `Unity` (-Z forward, Y-up), or `Blender Default`. Maps to the right `axis_forward`/`axis_up`/`global_scale`/`bake_space_transform` combination for the target.
+  - `Embed Textures` — when on, textures are packed into the `.fbx` (`path_mode=COPY`, `embed_textures=True`); when off, textures are referenced externally.
+  - `Smoothing` — `Off` / `Face` / `Edge` smoothing groups written to the FBX.
+- **OBJ export.** Writes a Wavefront `.obj` (plus `.mtl` when materials are enabled) via `bpy.ops.wm.obj_export`. New settings: `Export Materials`, `Forward` axis, `Up` axis.
+- **LOD generation honours the chosen format.** When LOD is enabled, the generated LOD files use the same extension as the main export (`model_LOD0.fbx`, `model_LOD1.fbx`, …).
+- **Format-aware size estimate.** The "Est. Export Size" line in the Mesh Stats panel now estimates FBX (uncompressed mesh + optionally embedded textures) and OBJ (ASCII geometry, textures referenced externally) instead of being GLB-only.
+
+### Changed
+
+- Export operator label and pipeline step name renamed from "Export GLB" to "Export Model" (the operator's `bl_idname` is unchanged for backwards compatibility with saved keymaps).
+
 ## [2.0.0] - 2026-04-21
 
 **Highlight:** Packaged as a Blender extension for [extensions.blender.org](https://extensions.blender.org). Install via `Edit → Preferences → Get Extensions` on Blender 4.2+, or sideload the `.zip` from GitHub releases.

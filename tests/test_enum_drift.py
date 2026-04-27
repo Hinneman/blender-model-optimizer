@@ -140,6 +140,11 @@ def test_extractor_found_every_expected_enum():
         "resize_mode",
         "image_format",
         "analysis_target_preset",
+        "export_format",
+        "fbx_axis_preset",
+        "fbx_smoothing",
+        "obj_forward_axis",
+        "obj_up_axis",
     }
     missing = expected - enums.keys()
     assert not missing, f"extractor missed these enums: {sorted(missing)}"

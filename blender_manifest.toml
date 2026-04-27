@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "ai_model_optimizer"
-version = "2.0.0"
+version = "2.1.0"
 name = "AI 3D Model Optimizer"
 tagline = "Optimize AI-generated 3D models for web and real-time use"
 maintainer = "René Voigt <hinneman@gmail.com>"
