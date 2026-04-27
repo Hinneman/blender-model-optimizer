@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ai_model_optimizer import utils
-from ai_model_optimizer.utils import _export_format_update, swap_export_extension
+from blender_model_optimizer import utils
+from blender_model_optimizer.utils import _export_format_update, swap_export_extension
 
 
 def _full_props(**overrides):

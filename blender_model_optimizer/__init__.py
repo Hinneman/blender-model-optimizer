@@ -88,7 +88,7 @@ def _load_defaults_on_file(dummy):
         if props is not None and load_defaults(props):
             loaded_any = True
     if loaded_any:
-        print("[AI Model Optimizer] Loaded saved defaults")
+        print("[3D Model Optimizer] Loaded saved defaults")
 
 
 def register():
@@ -108,7 +108,7 @@ def register():
     if hasattr(bpy.context, "scene") and bpy.context.scene is not None:
         load_defaults(bpy.context.scene.ai_optimizer)
 
-    print("[AI Model Optimizer] Add-on registered")
+    print("[3D Model Optimizer] Add-on registered")
 
 
 def unregister():
@@ -123,7 +123,7 @@ def unregister():
     del bpy.types.WindowManager.ai_optimizer_pipeline
     del bpy.types.WindowManager.ai_optimizer_analysis
     del bpy.types.Scene.ai_optimizer
-    print("[AI Model Optimizer] Add-on unregistered")
+    print("[3D Model Optimizer] Add-on unregistered")
 
 
 if __name__ == "__main__":

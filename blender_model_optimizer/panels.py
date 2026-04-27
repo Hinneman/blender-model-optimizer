@@ -14,11 +14,11 @@ from .utils import (
 
 
 class AIOPT_PT_main_panel(Panel):
-    bl_label = "AI Model Optimizer"
+    bl_label = "3D Model Optimizer"
     bl_idname = "AIOPT_PT_main_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
 
     def draw(self, context):
         layout = self.layout
@@ -111,7 +111,7 @@ class AIOPT_PT_progress_panel(Panel):
     bl_idname = "AIOPT_PT_progress_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
     bl_options = set()
 
     @classmethod
@@ -238,7 +238,7 @@ class AIOPT_PT_geometry_panel(Panel):
     bl_idname = "AIOPT_PT_geometry_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
     bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod
@@ -286,7 +286,7 @@ class AIOPT_PT_remove_interior_panel(Panel):
     bl_idname = "AIOPT_PT_remove_interior_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
     bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod
@@ -327,7 +327,7 @@ class AIOPT_PT_small_pieces_panel(Panel):
     bl_idname = "AIOPT_PT_small_pieces_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
     bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod
@@ -363,7 +363,7 @@ class AIOPT_PT_symmetry_panel(Panel):
     bl_idname = "AIOPT_PT_symmetry_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
     bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod
@@ -401,7 +401,7 @@ class AIOPT_PT_decimate_panel(Panel):
     bl_idname = "AIOPT_PT_decimate_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
     bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod
@@ -464,7 +464,7 @@ class AIOPT_PT_floor_snap_panel(Panel):
     bl_idname = "AIOPT_PT_floor_snap_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
     bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod
@@ -495,7 +495,7 @@ class AIOPT_PT_textures_panel(Panel):
     bl_idname = "AIOPT_PT_textures_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
     bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod
@@ -543,7 +543,7 @@ class AIOPT_PT_export_panel(Panel):
     bl_idname = "AIOPT_PT_export_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
     bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod
@@ -622,7 +622,7 @@ class AIOPT_PT_presets_panel(Panel):
     bl_idname = "AIOPT_PT_presets_panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AI Optimizer"
+    bl_category = "3D Optimizer"
     bl_options = {"DEFAULT_CLOSED"}
 
     @classmethod

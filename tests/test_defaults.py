@@ -1,7 +1,7 @@
 """Round-trip and migration tests for save_defaults / load_defaults."""
 
-from ai_model_optimizer import utils
-from ai_model_optimizer.utils import SAVEABLE_PROPS, load_defaults, save_defaults
+from blender_model_optimizer import utils
+from blender_model_optimizer.utils import SAVEABLE_PROPS, load_defaults, save_defaults
 
 
 class FakeProps:

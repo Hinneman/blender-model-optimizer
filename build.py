@@ -1,11 +1,11 @@
-"""Build script: packages ai_model_optimizer/ into a Blender extension .zip.
+"""Build script: packages blender_model_optimizer/ into a Blender extension .zip.
 
-Output: build/ai_model_optimizer-<version>.zip
+Output: build/blender_model_optimizer-<version>.zip
 
 The ZIP contains, at its root:
   - blender_manifest.toml (with version rewritten from pyproject.toml)
   - LICENSE
-  - the source files from ai_model_optimizer/ (__init__.py, operators.py, etc.),
+  - the source files from blender_model_optimizer/ (__init__.py, operators.py, etc.),
     flat at the zip root. Blender extracts into extensions/<repo>/<id>/, so the
     package is installed as <id>/__init__.py. __pycache__ and *.pyc are excluded.
 
@@ -26,7 +26,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-PKG_DIR = ROOT / "ai_model_optimizer"
+PKG_DIR = ROOT / "blender_model_optimizer"
 MANIFEST_SRC = ROOT / "blender_manifest.toml"
 LICENSE_SRC = ROOT / "LICENSE"
 BUILD_DIR = ROOT / "build"
@@ -78,7 +78,7 @@ def build() -> Path:
 
     version = read_version()
     BUILD_DIR.mkdir(exist_ok=True)
-    out = BUILD_DIR / f"ai_model_optimizer-{version}.zip"
+    out = BUILD_DIR / f"blender_model_optimizer-{version}.zip"
     if out.exists():
         out.unlink()
 
@@ -89,7 +89,7 @@ def build() -> Path:
         z.writestr("blender_manifest.toml", manifest_text)
         z.write(LICENSE_SRC, "LICENSE")
         for p in _iter_package_files(PKG_DIR):
-            # Package files go at the zip root (not nested under ai_model_optimizer/).
+            # Package files go at the zip root (not nested under blender_model_optimizer/).
             # Blender extracts the zip into extensions/<repo>/<id>/, so the install
             # path becomes .../<id>/__init__.py. Nesting inside the zip would produce
             # .../<id>/<id>/__init__.py and the outer dir would be a namespace package

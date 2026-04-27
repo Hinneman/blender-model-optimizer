@@ -6,13 +6,13 @@ import types
 
 import pytest
 
-from ai_model_optimizer import utils
-from ai_model_optimizer.utils import estimate_export_size
+from blender_model_optimizer import utils
+from blender_model_optimizer.utils import estimate_export_size
 
 # Backward-compat alias so existing tests don't change.
 estimate_glb_size = estimate_export_size
 
-OVERHEAD = 10 * 1024  # matches ai_model_optimizer/utils.py
+OVERHEAD = 10 * 1024  # matches blender_model_optimizer/utils.py
 
 
 def _props(**overrides):

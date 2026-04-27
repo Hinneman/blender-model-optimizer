@@ -5,9 +5,9 @@
 This project uses **ruff** for linting and formatting. Configuration is in `pyproject.toml`.
 
 ```bash
-ruff check ai_model_optimizer/          # lint
-ruff check ai_model_optimizer/ --fix    # lint and auto-fix
-ruff format ai_model_optimizer/         # format
+ruff check blender_model_optimizer/          # lint
+ruff check blender_model_optimizer/ --fix    # lint and auto-fix
+ruff format blender_model_optimizer/         # format
 ```
 
 ## Blender Add-on Conventions

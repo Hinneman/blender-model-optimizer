@@ -9,7 +9,7 @@ goes dead — no crash, no warning.
 
 This test:
   1. Extracts {enum_prop_name: {valid_choice_ids}} from ``properties.py``.
-  2. Walks every ``ai_model_optimizer/*.py`` AST for comparisons where one side is
+  2. Walks every ``blender_model_optimizer/*.py`` AST for comparisons where one side is
      ``<anything>.<enum_prop_name>`` and the other side is a string
      literal (directly, or inside a tuple/list/set for ``in`` checks).
   3. Asserts every such literal is a declared choice.
@@ -18,7 +18,7 @@ This test:
 import ast
 from pathlib import Path
 
-SRC_DIR = Path(__file__).resolve().parent.parent / "ai_model_optimizer"
+SRC_DIR = Path(__file__).resolve().parent.parent / "blender_model_optimizer"
 PROPERTIES_FILE = SRC_DIR / "properties.py"
 
 

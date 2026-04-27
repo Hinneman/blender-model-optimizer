@@ -12,12 +12,12 @@ Write-Host "Building extension zip..."
 python build.py
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$Zip = Get-ChildItem "$RepoRoot\build\ai_model_optimizer-*.zip" |
+$Zip = Get-ChildItem "$RepoRoot\build\blender_model_optimizer-*.zip" |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 
 if (-not $Zip) {
-    Write-Error "No ai_model_optimizer-*.zip found in build/"
+    Write-Error "No blender_model_optimizer-*.zip found in build/"
     exit 1
 }
 
