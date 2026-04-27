@@ -6,10 +6,13 @@ import types
 
 import pytest
 
-from ai_model_optimizer import utils
-from ai_model_optimizer.utils import estimate_glb_size
+from blender_model_optimizer import utils
+from blender_model_optimizer.utils import estimate_export_size
 
-OVERHEAD = 10 * 1024  # matches ai_model_optimizer/utils.py
+# Backward-compat alias so existing tests don't change.
+estimate_glb_size = estimate_export_size
+
+OVERHEAD = 10 * 1024  # matches blender_model_optimizer/utils.py
 
 
 def _props(**overrides):
@@ -27,6 +30,7 @@ def _props(**overrides):
         "image_quality": 100,
         "bake_normal_map": False,
         "normal_map_resolution": 1024,
+        "export_format": "GLB",
     }
     base.update(overrides)
     return types.SimpleNamespace(**base)
@@ -193,3 +197,139 @@ def test_normal_map_bake_adds_texture(stub_images):
     baked = estimate_glb_size([], _props(bake_normal_map=True, normal_map_resolution=256, image_format="NONE"))
     nmap_raw = 256 * 256 * 3
     assert baked - baseline == pytest.approx(nmap_raw / 3.0)
+
+
+# ------------------------- FBX format -------------------------------------
+
+FBX_OVERHEAD = 2 * 1024
+
+
+def _fbx_props(**overrides):
+    base = dict(
+        run_decimate=False,
+        decimate_ratio=1.0,
+        run_symmetry=False,
+        run_resize_textures=False,
+        max_texture_size=1024,
+        resize_mode="DOWNSIZE",
+        bake_normal_map=False,
+        normal_map_resolution=1024,
+        export_format="FBX",
+        fbx_embed_textures=False,
+    )
+    base.update(overrides)
+    return types.SimpleNamespace(**base)
+
+
+def test_fbx_empty_scene_returns_overhead_only(stub_images):
+    stub_images([])
+    assert estimate_export_size([], _fbx_props()) == FBX_OVERHEAD
+
+
+def test_fbx_geometry_bytes_per_vertex_and_face(stub_images):
+    stub_images([])
+    raw = 10 * 32 + 20 * 12
+    expected = raw * 1.25 + FBX_OVERHEAD
+    assert estimate_export_size([_mesh(verts=10, faces=20)], _fbx_props()) == pytest.approx(expected)
+
+
+def test_fbx_decimate_ratio_applied_only_when_enabled(stub_images):
+    stub_images([])
+    mesh = _mesh(verts=100, faces=100)
+    on = estimate_export_size([mesh], _fbx_props(run_decimate=True, decimate_ratio=0.5))
+    raw = (100 * 32 + 100 * 12) * 0.5
+    assert on == pytest.approx(raw * 1.25 + FBX_OVERHEAD)
+
+
+def test_fbx_textures_zero_when_embed_disabled(stub_images):
+    stub_images([_Img(size=(512, 512))])
+    assert estimate_export_size([], _fbx_props(fbx_embed_textures=False)) == FBX_OVERHEAD
+
+
+def test_fbx_textures_estimated_when_embed_enabled(stub_images):
+    stub_images([_Img(size=(512, 512))])
+    expected_tex = 512 * 512 * 4 * 0.3
+    size = estimate_export_size([], _fbx_props(fbx_embed_textures=True))
+    assert size == pytest.approx(expected_tex + FBX_OVERHEAD)
+
+
+def test_fbx_normal_map_added_when_embed_enabled(stub_images):
+    stub_images([])
+    expected_nmap = 256 * 256 * 3 * 0.3
+    baseline = estimate_export_size([], _fbx_props(fbx_embed_textures=True, bake_normal_map=False))
+    baked = estimate_export_size(
+        [], _fbx_props(fbx_embed_textures=True, bake_normal_map=True, normal_map_resolution=256)
+    )
+    assert baked - baseline == pytest.approx(expected_nmap)
+
+
+def test_fbx_normal_map_ignored_when_embed_disabled(stub_images):
+    stub_images([])
+    size = estimate_export_size(
+        [], _fbx_props(fbx_embed_textures=False, bake_normal_map=True, normal_map_resolution=256)
+    )
+    assert size == FBX_OVERHEAD
+
+
+def test_fbx_symmetry_reduces_geometry_by_40_percent(stub_images):
+    stub_images([])
+    mesh = _mesh(verts=100, faces=100)
+    raw = (100 * 32 + 100 * 12) * 0.6
+    size = estimate_export_size([mesh], _fbx_props(run_symmetry=True))
+    assert size == pytest.approx(raw * 1.25 + FBX_OVERHEAD)
+
+
+def test_fbx_resize_mode_all_with_embed(stub_images):
+    stub_images([_Img(size=(4096, 2048))])
+    expected_tex = 512 * 512 * 4 * 0.3
+    size = estimate_export_size(
+        [],
+        _fbx_props(
+            fbx_embed_textures=True,
+            run_resize_textures=True,
+            resize_mode="ALL",
+            max_texture_size=512,
+        ),
+    )
+    assert size == pytest.approx(expected_tex + FBX_OVERHEAD)
+
+
+# ------------------------- OBJ format -------------------------------------
+
+OBJ_OVERHEAD = 1 * 1024
+
+
+def _obj_props(**overrides):
+    base = dict(
+        run_decimate=False,
+        decimate_ratio=1.0,
+        run_symmetry=False,
+        export_format="OBJ",
+    )
+    base.update(overrides)
+    return types.SimpleNamespace(**base)
+
+
+def test_obj_empty_scene_returns_overhead_only(stub_images):
+    stub_images([])
+    assert estimate_export_size([], _obj_props()) == OBJ_OVERHEAD
+
+
+def test_obj_geometry_in_ascii_bytes(stub_images):
+    stub_images([])
+    expected = 10 * (32 + 32 + 22) + 20 * 22
+    size = estimate_export_size([_mesh(verts=10, faces=20)], _obj_props())
+    assert size == pytest.approx(expected + OBJ_OVERHEAD)
+
+
+def test_obj_textures_never_contribute(stub_images):
+    stub_images([_Img(size=(2048, 2048))])
+    assert estimate_export_size([], _obj_props()) == OBJ_OVERHEAD
+
+
+def test_obj_symmetry_reduces_geometry_by_40_percent(stub_images):
+    stub_images([])
+    mesh = _mesh(verts=100, faces=100)
+    raw = (100 * (32 + 32 + 22) + 100 * 22) * 0.6
+    size = estimate_export_size([mesh], _obj_props(run_symmetry=True))
+    assert size == pytest.approx(raw + OBJ_OVERHEAD)

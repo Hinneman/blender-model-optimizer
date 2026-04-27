@@ -43,7 +43,7 @@ def _pyproject_version() -> str:
 
 def test_zip_filename_includes_version(built_zip):
     version = _pyproject_version()
-    assert built_zip.name == f"ai_model_optimizer-{version}.zip"
+    assert built_zip.name == f"blender_model_optimizer-{version}.zip"
 
 
 def test_zip_contains_manifest(built_zip):
@@ -63,7 +63,7 @@ def test_zip_contains_package_init(built_zip):
 
 def test_zip_has_all_source_modules_at_root(built_zip):
     """Blender unpacks the zip into `extensions/<repo>/<id>/`, so source files
-    must live at the zip root. A nested `ai_model_optimizer/...` path would
+    must live at the zip root. A nested `blender_model_optimizer/...` path would
     install as `<id>/<id>/...`, making the outer dir a namespace package that
     Blender can't import ("module loaded with no associated file")."""
     expected = {
@@ -80,7 +80,7 @@ def test_zip_has_all_source_modules_at_root(built_zip):
         names = set(z.namelist())
     missing = expected - names
     assert not missing, f"missing at zip root: {missing}"
-    nested = {n for n in names if n.startswith("ai_model_optimizer/")}
+    nested = {n for n in names if n.startswith("blender_model_optimizer/")}
     assert not nested, f"source files should be at zip root, not nested: {nested}"
 
 
@@ -97,7 +97,7 @@ def test_manifest_required_fields(built_zip):
         manifest_bytes = z.read("blender_manifest.toml")
     data = tomllib.loads(manifest_bytes.decode("utf-8"))
     assert data["schema_version"] == "1.0.0"
-    assert data["id"] == "ai_model_optimizer"
+    assert data["id"] == "blender_model_optimizer"
     assert data["type"] == "add-on"
     assert data["blender_version_min"] == "4.2.0"
     assert data["license"] == ["SPDX:MIT"]

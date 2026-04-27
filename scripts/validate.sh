@@ -9,9 +9,9 @@ cd "$REPO_ROOT"
 echo "Building extension zip..."
 python build.py
 
-ZIP="$(ls -t build/ai_model_optimizer-*.zip 2>/dev/null | head -n1 || true)"
+ZIP="$(ls -t build/blender_model_optimizer-*.zip 2>/dev/null | head -n1 || true)"
 if [[ -z "$ZIP" ]]; then
-  echo "ERROR: no ai_model_optimizer-*.zip found in build/" >&2
+  echo "ERROR: no blender_model_optimizer-*.zip found in build/" >&2
   exit 1
 fi
 

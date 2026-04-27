@@ -30,7 +30,7 @@ from .utils import (
     PipelineCancelled,
     count_faces,
     debug_buffer_is_empty,
-    export_glb_all,
+    export_model,
     generate_lods,
     get_config_path,
     get_debug_log_text,
@@ -260,8 +260,8 @@ class AIOPT_OT_resize_textures(Operator):
 
 class AIOPT_OT_export_glb(Operator):
     bl_idname = "ai_optimizer.export_glb"
-    bl_label = "Export GLB"
-    bl_description = "Export as compressed GLB with optimized settings"
+    bl_label = "Export Model"
+    bl_description = "Export the optimized model in the chosen format"
     bl_options = {"REGISTER"}
 
     def execute(self, context):
@@ -272,7 +272,7 @@ class AIOPT_OT_export_glb(Operator):
             lod_detail = generate_lods(context, props)
             self.report({"INFO"}, lod_detail)
 
-        detail = export_glb_all(context, props)
+        detail = export_model(context, props)
 
         if detail.startswith("Export may have failed"):
             self.report({"ERROR"}, detail)
@@ -395,7 +395,7 @@ class AIOPT_OT_run_all(Operator):
         if props.run_lod:
             self._steps.append(("LOD Generation", self._setup_lod, self._tick_lod, self._teardown_lod))
         if props.run_export:
-            self._steps.append(("Export GLB", self._setup_export, self._tick_export, self._teardown_export))
+            self._steps.append(("Export Model", self._setup_export, self._tick_export, self._teardown_export))
 
         if not self._steps:
             self.report({"WARNING"}, "No pipeline steps enabled")
@@ -1045,33 +1045,52 @@ class AIOPT_OT_run_all(Operator):
     def _teardown_lod(self, context):
         return self._step_end(context, "LOD Generation", self._lod_detail)
 
-    # -- Export GLB --
+    # -- Export Model --
 
     def _setup_export(self, context):
         self._sub_items = [None]
         self._export_detail = ""
         props = context.scene.ai_optimizer
-        self._step_start(
-            context,
-            "Export GLB",
-            {
-                "output_filename": props.output_filename,
-                "output_folder": props.output_folder or "(blend file dir)",
-                "export_selected_only": props.export_selected_only,
-                "use_draco": props.use_draco,
-                "draco_level": props.draco_level,
-                "draco_position_quantization": props.draco_position_quantization,
-                "draco_normal_quantization": props.draco_normal_quantization,
-                "draco_texcoord_quantization": props.draco_texcoord_quantization,
-                "image_format": props.image_format,
-                "image_quality": props.image_quality,
-            },
-        )
+        config = {
+            "export_format": props.export_format,
+            "output_filename": props.output_filename,
+            "output_folder": props.output_folder or "(blend file dir)",
+            "export_selected_only": props.export_selected_only,
+        }
+        if props.export_format == "GLB":
+            config.update(
+                {
+                    "use_draco": props.use_draco,
+                    "draco_level": props.draco_level,
+                    "draco_position_quantization": props.draco_position_quantization,
+                    "draco_normal_quantization": props.draco_normal_quantization,
+                    "draco_texcoord_quantization": props.draco_texcoord_quantization,
+                    "image_format": props.image_format,
+                    "image_quality": props.image_quality,
+                }
+            )
+        elif props.export_format == "FBX":
+            config.update(
+                {
+                    "fbx_axis_preset": props.fbx_axis_preset,
+                    "fbx_embed_textures": props.fbx_embed_textures,
+                    "fbx_smoothing": props.fbx_smoothing,
+                }
+            )
+        elif props.export_format == "OBJ":
+            config.update(
+                {
+                    "obj_export_materials": props.obj_export_materials,
+                    "obj_forward_axis": props.obj_forward_axis,
+                    "obj_up_axis": props.obj_up_axis,
+                }
+            )
+        self._step_start(context, "Export Model", config)
         return 1
 
     def _tick_export(self, context, index):
         props = context.scene.ai_optimizer
-        detail = export_glb_all(context, props)
+        detail = export_model(context, props)
         self._export_detail = detail
         return detail
 
@@ -1080,7 +1099,7 @@ class AIOPT_OT_run_all(Operator):
         detail = self._export_detail
         if "(" in detail and ")" in detail:
             state.export_size = detail[detail.rfind("(") + 1 : detail.rfind(")")]
-        return self._step_end(context, "Export GLB", detail)
+        return self._step_end(context, "Export Model", detail)
 
 
 class AIOPT_OT_cancel_pipeline(Operator):

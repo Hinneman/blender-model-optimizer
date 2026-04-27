@@ -21,14 +21,14 @@ Each release does two things:
 - [ ] Commit the version bump + changelog (user commits — Claude never does).
 - [ ] `git tag vX.Y.Z`
 - [ ] `git push && git push --tags`
-- [ ] Wait for the GitHub Action to finish. Verify the release at <https://github.com/Hinneman/blender-model-optimizer/releases> has `ai_model_optimizer-X.Y.Z.zip` attached.
+- [ ] Wait for the GitHub Action to finish. Verify the release at <https://github.com/Hinneman/blender-model-optimizer/releases> has `blender_model_optimizer-X.Y.Z.zip` attached.
 
 ### 3. Publish on extensions.blender.org
 
 **First release only — create the listing:**
 
 - [ ] Sign in at <https://extensions.blender.org>.
-- [ ] Click **Add new extension** → upload `ai_model_optimizer-X.Y.Z.zip`.
+- [ ] Click **Add new extension** → upload `blender_model_optimizer-X.Y.Z.zip`.
 - [ ] Fill in description, screenshots, and tags on the listing page.
 - [ ] Click **Submit for review**.
 

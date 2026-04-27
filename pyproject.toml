@@ -1,7 +1,7 @@
 [project]
 name = "blender-model-optimizer"
-version = "2.0.0"
-description = "Blender add-on to optimize AI-generated 3D models"
+version = "2.1.0"
+description = "Blender add-on to optimize 3D models for web and real-time use"
 requires-python = ">=3.10"
 
 [tool.ruff]
@@ -32,7 +32,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Blender add-on files may defer heavy imports past module-level statements
-"ai_model_optimizer/*.py" = ["E402"]
+"blender_model_optimizer/*.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"

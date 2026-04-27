@@ -6,14 +6,14 @@ Blender add-on ("AI 3D Model Optimizer") that optimizes AI-generated 3D models f
 
 ## Structure
 
-- `ai_model_optimizer/__init__.py` — register/unregister
-- `ai_model_optimizer/operators.py` — All AIOPT_OT_* operator classes
-- `ai_model_optimizer/panels.py` — All AIOPT_PT_* panel classes
-- `ai_model_optimizer/properties.py` — Property groups (AIOPT_Properties, AIOPT_PipelineState)
-- `ai_model_optimizer/geometry.py` — Geometry fixing, decimation, interior removal, symmetry
-- `ai_model_optimizer/textures.py` — Image cleanup, resizing, fingerprinting, vertex color baking
-- `ai_model_optimizer/materials.py` — Material merging, mesh joining
-- `ai_model_optimizer/utils.py` — Shared helpers (logging, config, mesh selection, size estimation, export)
+- `blender_model_optimizer/__init__.py` — register/unregister
+- `blender_model_optimizer/operators.py` — All AIOPT_OT_* operator classes
+- `blender_model_optimizer/panels.py` — All AIOPT_PT_* panel classes
+- `blender_model_optimizer/properties.py` — Property groups (AIOPT_Properties, AIOPT_PipelineState)
+- `blender_model_optimizer/geometry.py` — Geometry fixing, decimation, interior removal, symmetry
+- `blender_model_optimizer/textures.py` — Image cleanup, resizing, fingerprinting, vertex color baking
+- `blender_model_optimizer/materials.py` — Material merging, mesh joining
+- `blender_model_optimizer/utils.py` — Shared helpers (logging, config, mesh selection, size estimation, export)
 - `blender_manifest.toml` — Extension metadata (id, version, permissions, etc.)
 - `build.py` — Build script to produce the extension `.zip`
 
@@ -28,7 +28,7 @@ Blender add-on ("AI 3D Model Optimizer") that optimizes AI-generated 3D models f
 
 ## Build
 
-- Run `python build.py` to produce `build/ai_model_optimizer-<version>.zip`
+- Run `python build.py` to produce `build/blender_model_optimizer-<version>.zip`
 - The build reads version from `pyproject.toml` and injects it into `blender_manifest.toml` inside the zip
 - Sideload in Blender: drag-and-drop the zip, or Edit → Preferences → Add-ons → Install from Disk
 - Before tagging a release, run `scripts/validate.ps1` (Windows) or `scripts/validate.sh` (POSIX) to run `blender --command extension validate` against the built zip
@@ -43,8 +43,8 @@ Blender add-on ("AI 3D Model Optimizer") that optimizes AI-generated 3D models f
 ## Development
 
 - No external dependencies beyond Blender's bundled Python
-- **Linting**: `ruff check ai_model_optimizer/` — config in `pyproject.toml`
-- **Formatting**: `ruff format ai_model_optimizer/`
+- **Linting**: `ruff check blender_model_optimizer/` — config in `pyproject.toml`
+- **Formatting**: `ruff format blender_model_optimizer/`
 - See [BEST_PRACTICES.md](BEST_PRACTICES.md) for coding conventions and guidelines
 
 ## Working with Claude
