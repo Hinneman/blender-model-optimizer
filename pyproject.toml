@@ -1,6 +1,6 @@
 [project]
 name = "blender-model-optimizer"
-version = "2.1.0"
+version = "2.1.1"
 description = "Blender add-on to optimize 3D models for web and real-time use"
 requires-python = ">=3.10"
 
